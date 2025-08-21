@@ -77,83 +77,67 @@ const CONFIG = {
 // Minimal starter set. Add more cases/skins as needed.
 // Each case has arrays keyed by rarity; each skin has name + weapon.
 const CASES = {
+  'CS:GO Weapon Case': {
+    type: 'knife',
+    Blue:   [ { weapon: 'MP7', name: 'Skulls' }, { weapon: 'Nova', name: 'Sand Dune' }, { weapon: 'Glock-18', name: 'Brass' }, { weapon: 'SG 553', name: 'Ultraviolet' }, { weapon: 'AUG', name: 'Wings' } ],
+    Purple: [ { weapon: 'Desert Eagle', name: 'Hypnotic' }, { weapon: 'P90', name: 'Blind Spot' }, { weapon: 'M4A1-S', name: 'Dark Water' } ],
+    Pink:   [ { weapon: 'AK-47', name: 'Case Hardened' }, { weapon: 'AWP', name: 'Lightning Strike' } ],
+    Red:    [ { weapon: 'M4A4', name: 'Asiimov' }, { weapon: 'AK-47', name: 'Redline' } ],
+    Gold: KNIVES_OG,
+  },
+  'Operation Breakout Weapon Case': {
+    type: 'knife',
+    Blue:   [ { weapon: 'PP-Bizon', name: 'Osiris' }, { weapon: 'UMP-45', name: 'Labyrinth' }, { weapon: 'P2000', name: 'Ivory' }, { weapon: 'Nova', name: 'Koi' }, { weapon: 'Negev', name: 'Desert-Strike' } ],
+    Purple: [ { weapon: 'P90', name: 'Asiimov' }, { weapon: 'CZ75-Auto', name: 'Tigris' }, { weapon: 'Five-SeveN', name: 'Fowl Play' } ],
+    Pink:   [ { weapon: 'M4A1-S', name: 'Cyrex' }, { weapon: 'Glock-18', name: 'Water Elemental' } ],
+    Red:    [ { weapon: 'Desert Eagle', name: 'Conspiracy' }, { weapon: 'P90', name: 'Trigon' } ],
+    Gold: KNIVES_BUTTERFLY,
+  },
+  'Fever Case': {
+    type: 'knife',
+    Blue:   [ { weapon: 'MP9', name: 'Goo' }, { weapon: 'MAC-10', name: 'Last Dive' }, { weapon: 'FAMAS', name: 'Pulse' }, { weapon: 'CZ75-Auto', name: 'Tacticat' }, { weapon: 'XM1014', name: 'Bone Machine' } ],
+    Purple: [ { weapon: 'SSG 08', name: 'Fever Dream' }, { weapon: 'UMP-45', name: 'Primal Saber' }, { weapon: 'P250', name: 'Asiimov' } ],
+    Pink:   [ { weapon: 'AK-47', name: 'Fever Dream' }, { weapon: 'M4A1-S', name: 'Decimator' } ],
+    Red:    [ { weapon: 'AWP', name: 'Hyper Beast' }, { weapon: 'Desert Eagle', name: 'Blaze' } ],
+    Gold: KNIVES_OG,
+  },
+  // Existing cases kept below
+  'Glove Case': {
+    type: 'glove',
+    Blue:   [ { weapon: 'MP7', name: 'Cirrus' }, { weapon: 'G3SG1', name: 'Stinger' }, { weapon: 'CZ75-Auto', name: 'Polymer' }, { weapon: 'P2000', name: 'Turf' }, { weapon: 'Nova', name: 'Gila' } ],
+    Purple: [ { weapon: 'Galil AR', name: 'Black Sand' }, { weapon: 'M4A4', name: 'Buzz Kill' }, { weapon: 'USP-S', name: 'Cyrex' } ],
+    Pink:   [ { weapon: 'FAMAS', name: 'Mecha Industries' }, { weapon: 'SSG 08', name: 'Dragonfire' } ],
+    Red:    [ { weapon: 'AK-47', name: 'Wasteland Rebel' }, { weapon: 'P90', name: 'Shallow Grave' } ],
+    Gold: GLOVES_A,
+  },
+  'Gallery Case': {
+    type: 'glove',
+    Blue:   [ { weapon: 'MP9', name: 'Goo' }, { weapon: 'XM1014', name: 'Teclu Burner' }, { weapon: 'UMP-45', name: 'Exposure' }, { weapon: 'P250', name: 'Iron Clad' }, { weapon: 'FAMAS', name: 'Pulse' } ],
+    Purple: [ { weapon: 'USP-S', name: 'Blueprint' }, { weapon: 'Five-SeveN', name: 'Triumvirate' }, { weapon: 'AUG', name: 'Aristocrat' } ],
+    Pink:   [ { weapon: 'AK-47', name: 'Fuel Injector' }, { weapon: 'M4A1-S', name: 'Decimator' } ],
+    Red:    [ { weapon: 'AWP', name: 'Mortis' }, { weapon: 'Desert Eagle', name: 'Kumicho Dragon' } ],
+    Gold: GLOVES_B,
+  },
   'Prisma 2 Case': {
-    Blue: [
-      { weapon: 'CZ75-Auto', name: 'Distressed' },
-      { weapon: 'P2000', name: 'Acid Etched' },
-      { weapon: 'SCAR-20', name: 'Enforcer' },
-      { weapon: 'SG 553', name: 'Darkwing' },
-      { weapon: 'MAC-10', name: 'Disco Tech' },
-    ],
-    Purple: [
-      { weapon: 'R8 Revolver', name: 'Bone Forged' },
-      { weapon: 'Desert Eagle', name: 'Blue Ply' },
-      { weapon: 'AK-47', name: 'Phantom Disruptor' },
-      { weapon: 'Sawed-Off', name: 'Apocalypto' },
-    ],
-    Pink: [
-      { weapon: 'M4A1-S', name: 'Player Two' },
-      { weapon: 'Glock-18', name: 'Bullet Queen' },
-    ],
-    Red: [
-      { weapon: 'AUG', name: 'Tom Cat' },
-      { weapon: 'SSG 08', name: 'Fever Dream' },
-    ],
-    Gold: [
-      { weapon: '★ Stiletto Knife', name: 'Doppler' },
-      { weapon: '★ Nomad Knife', name: 'Marble Fade' },
-    ],
+    Blue: [ { weapon: 'CZ75-Auto', name: 'Distressed' }, { weapon: 'P2000', name: 'Acid Etched' }, { weapon: 'SCAR-20', name: 'Enforcer' }, { weapon: 'SG 553', name: 'Darkwing' }, { weapon: 'MAC-10', name: 'Disco Tech' } ],
+    Purple: [ { weapon: 'R8 Revolver', name: 'Bone Forged' }, { weapon: 'Desert Eagle', name: 'Blue Ply' }, { weapon: 'AK-47', name: 'Phantom Disruptor' }, { weapon: 'Sawed-Off', name: 'Apocalypto' } ],
+    Pink: [ { weapon: 'M4A1-S', name: 'Player Two' }, { weapon: 'Glock-18', name: 'Bullet Queen' } ],
+    Red:  [ { weapon: 'AUG', name: 'Tom Cat' }, { weapon: 'SSG 08', name: 'Fever Dream' } ],
+    Gold: [ { weapon: '★ Stiletto Knife', name: 'Doppler' }, { weapon: '★ Nomad Knife', name: 'Marble Fade' } ],
   },
   'Dreams & Nightmares Case': {
-    Blue: [
-      { weapon: 'P2000', name: 'Lifted Spirits' },
-      { weapon: 'XM1014', name: 'Zombie Offensive' },
-      { weapon: 'G3SG1', name: 'Dream Glade' },
-      { weapon: 'SCAR-20', name: 'Ensnared' },
-      { weapon: 'MP7', name: 'Guerrilla' },
-    ],
-    Purple: [
-      { weapon: 'USP-S', name: 'Ticket to Hell' },
-      { weapon: 'MAC-10', name: 'Ensnared' },
-      { weapon: 'MAG-7', name: 'Foresight' },
-    ],
-    Pink: [
-      { weapon: 'AK-47', name: 'Nightwish' },
-      { weapon: 'MP9', name: 'Starlight Protector' },
-    ],
-    Red: [
-      { weapon: 'MP9', name: 'Food Chain' },
-      { weapon: 'M4A1-S', name: 'Night Terror' },
-    ],
-    Gold: [
-      { weapon: '★ Talon Knife', name: 'Gamma Doppler' },
-      { weapon: '★ Skeleton Knife', name: 'Case Hardened' },
-    ],
+    Blue: [ { weapon: 'P2000', name: 'Lifted Spirits' }, { weapon: 'XM1014', name: 'Zombie Offensive' }, { weapon: 'G3SG1', name: 'Dream Glade' }, { weapon: 'SCAR-20', name: 'Ensnared' }, { weapon: 'MP7', name: 'Guerrilla' } ],
+    Purple:[ { weapon: 'USP-S', name: 'Ticket to Hell' }, { weapon: 'MAC-10', name: 'Ensnared' }, { weapon: 'MAG-7', name: 'Foresight' } ],
+    Pink:  [ { weapon: 'AK-47', name: 'Nightwish' }, { weapon: 'MP9', name: 'Starlight Protector' } ],
+    Red:   [ { weapon: 'MP9', name: 'Food Chain' }, { weapon: 'M4A1-S', name: 'Night Terror' } ],
+    Gold:  [ { weapon: '★ Talon Knife', name: 'Gamma Doppler' }, { weapon: '★ Skeleton Knife', name: 'Case Hardened' } ],
   },
   'Fracture Case': {
-    Blue: [
-      { weapon: 'P250', name: 'Cassette' },
-      { weapon: 'XM1014', name: 'Entombed' },
-      { weapon: 'MP5-SD', name: 'Kitbash' },
-      { weapon: 'Negev', name: 'Ultralight' },
-    ],
-    Purple: [
-      { weapon: 'Tec-9', name: 'Brother' },
-      { weapon: 'Galil AR', name: 'Connexion' },
-      { weapon: 'MAG-7', name: 'Monster Call' },
-    ],
-    Pink: [
-      { weapon: 'M4A4', name: 'Tooth Fairy' },
-      { weapon: 'Glock-18', name: 'Vogue' },
-    ],
-    Red: [
-      { weapon: 'Desert Eagle', name: 'Printstream' },
-      { weapon: 'AK-47', name: 'Legion of Anubis' },
-    ],
-    Gold: [
-      { weapon: '★ Karambit', name: 'Damascus Steel' },
-      { weapon: '★ Bayonet', name: 'Tiger Tooth' },
-    ],
+    Blue: [ { weapon: 'P250', name: 'Cassette' }, { weapon: 'XM1014', name: 'Entombed' }, { weapon: 'MP5-SD', name: 'Kitbash' }, { weapon: 'Negev', name: 'Ultralight' } ],
+    Purple:[ { weapon: 'Tec-9', name: 'Brother' }, { weapon: 'Galil AR', name: 'Connexion' }, { weapon: 'MAG-7', name: 'Monster Call' } ],
+    Pink:  [ { weapon: 'M4A4', name: 'Tooth Fairy' }, { weapon: 'Glock-18', name: 'Vogue' } ],
+    Red:   [ { weapon: 'Desert Eagle', name: 'Printstream' }, { weapon: 'AK-47', name: 'Legion of Anubis' } ],
+    Gold:  [ { weapon: '★ Karambit', name: 'Damascus Steel' }, { weapon: '★ Bayonet', name: 'Tiger Tooth' } ],
   },
 };
 

@@ -330,17 +330,17 @@ async function leaderboardTop(n = 5) {
 // ----------------- Command Router -----------------
 function isModOrBroadcaster(tags) { const badges = tags.badges || {}; return !!tags.mod || badges.broadcaster === '1'; }
 const HELP_TEXT = [
-  'Commands:',
-  '!cases — list available cases',
-  '!open <case> [xN] — open 1-10 cases (e.g., !open prisma 2 x5)',
-  '!inv [@user] — show your inventory or someone else\'s',
-  '!worth [@user] — total inventory value (USD)',
-  '!price <market name>|last — price lookup (e.g., StatTrak™ AK-47 | Redline (Field-Tested) or 'last')',
-  '!top [N] — leaderboard by total inventory value',
-  '!stats — show global drop stats',
-  '!setcase <case> — set your default case',
-  '!mycase — show your default case',
-  '!help — this menu',
+  `Commands:`,
+  `!cases — list cases`,
+  `!open <case> [xN] — open 1-10 cases`,
+  `!inv [@user] — show inventory`,
+  `!worth [@user] — inventory value (USD)`,
+  `!price <market name>|last — e.g., StatTrak™ AK-47 | Redline (Field-Tested) or "last"`,
+  `!top [N] — leaderboard by inventory value`,
+  `!stats — global drop stats`,
+  `!setcase <case> — set default case`,
+  `!mycase — show your default case`,
+  `!help — this menu`,
 ].join(' | ');
 
 // Map user -> default case
@@ -875,4 +875,3 @@ function gracefulExit() {
 }
 process.on('SIGTERM', gracefulExit);
 process.on('SIGINT', gracefulExit);
-

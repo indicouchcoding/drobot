@@ -28,6 +28,7 @@ import fs from 'fs';
 import path from 'path';
 import tmi from 'tmi.js';
 import dotenv from 'dotenv';
+import http from 'http';
 dotenv.config();
 
 // ----------------- Config -----------------
@@ -371,6 +372,17 @@ client.connect().then(() => {
   console.log('Case bot connected to', process.env.TWITCH_CHANNEL);
 }).catch(console.error);
 
+// --- Minimal HTTP health server for Render Web Service ---
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  if (req.url === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    return res.end('ok');
+  }
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Indicouch Case Bot OK');
+}).listen(PORT, () => console.log(`Health server listening on :${PORT}`));
+
 client.on('message', async (channel, tags, message, self) => {
   if (self) return;
   const user = (tags['display-name'] || tags.username || 'user').toLowerCase();
@@ -439,37 +451,7 @@ client.on('message', async (channel, tags, message, self) => {
       client.say(channel, `Drops so far — Total opens: ${s.total} | ${s.fmt}`);
       break;
     }
-        case 'worth': {
-      const target = (args[0]?.replace('@','') || user).toLowerCase();
-      const { totalUSD, count } = await inventoryValue(target);
-      if (count === 0) { client.say(channel, `@${user} ${target} has an empty inventory.`); break; }
-      client.say(channel, `@${user} ${target}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`);
-      break;
-    }
-
-    case 'price': {
-      const q = args.join(' ').trim();
-      if (!q) { client.say(channel, `@${user} usage: !price <market name> e.g., StatTrak™ AK-47 | Redline (Field-Tested)`); break; }
-      try {
-        const p = await priceForMarketHash(q);
-        if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find a price for: ${q}`); break; }
-        client.say(channel, `@${user} ${q} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
-      } catch {
-        client.say(channel, `@${user} price lookup failed.`);
-      }
-      break;
-    }
-
-    case 'top': {
-      let n = 5;
-      if (args[0] && /^\d+$/.test(args[0])) n = parseInt(args[0], 10);
-      const rows = await leaderboardTop(n);
-      if (!rows.length) { client.say(channel, `@${user} leaderboard is empty.`); break; }
-      const line = rows.map((r, i) => `#${i+1} ${r.user}: $${r.total.toFixed(2)} (${r.count})`).join(' | ');
-      client.say(channel, `Top ${rows.length} (by inventory value): ${line}`);
-      break;
-    }
-     default:
+    default:
       // soft-help for unknown
       if (cmd) client.say(channel, `@${user} unknown command. ${HELP_TEXT}`);
       break;

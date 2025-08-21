@@ -5,34 +5,28 @@ License: MIT
 
 What it does
 - Simulates opening CS2/CSGO cases in chat with realistic rarity + wear odds
-- Viewers can open cases, check inventories, see prices, leaderboards, and stats
+- Viewers can open cases, check inventories, trade/gift, and view stats
 - Streamer/mods can tweak odds, add cases, wipe inventories
 
-Zero-setup vibe
-- Works great on Render as a Web Service (exposes a tiny HTTP health server)
-- Env-only config; no code changes needed
-
 Quick start
-1) Node.js 20+
-2) Files: indicouch-case-bot.js (this file) + package.json (see README notes)
-3) Env vars on your host:
+1) Install Node.js 18+
+2) In this folder, run:  npm init -y && npm i tmi.js dotenv
+3) Create a file named .env with:
    TWITCH_USERNAME=your_bot_username
    TWITCH_OAUTH=oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   TWITCH_CHANNEL=your_channel
+   TWITCH_CHANNEL=your_channel_name
    BOT_PREFIX=!
-   PRICE_PROVIDER=best_of   # or skinport or csfloat
-   PRICE_CURRENCY=USD       # for Skinport
-   PRICE_TTL_MINUTES=10
-   CSFLOAT_API_KEY=...      # optional
-4) Start:  node indicouch-case-bot.js
+   PRICE_PROVIDER=best_of
+   PRICE_CURRENCY=USD
+   CSFLOAT_API_KEY=
+4) Run the bot:  node indicouch-case-bot.js
 
-Get an OAuth token while logged into the bot account:
+Pro-tip: Get an OAuth token here while logged into the bot account:
 https://twitchapps.com/tmi/
 
 --------------------------------------------------------------------------------
 */
 
-// ----------------- Imports -----------------
 import fs from 'fs';
 import path from 'path';
 import tmi from 'tmi.js';
@@ -48,7 +42,7 @@ const CONFIG = {
   stattrakChance: 0.10, // 10%
   souvenirChance: 0.00, // 0% (regular cases don't drop Souvenirs; leave 0)
   wearTiers: [
-    // Rough CS wear distribution: FN 3%, MW 7%, FT 38%, WW 38%, BS 14%
+    // CS wear distribution approximation: FN 3%, MW 7%, FT 38%, WW 38%, BS 14%
     { key: 'Factory New', short: 'FN', p: 0.03, float: [0.00, 0.07] },
     { key: 'Minimal Wear', short: 'MW', p: 0.07, float: [0.07, 0.15] },
     { key: 'Field-Tested', short: 'FT', p: 0.38, float: [0.15, 0.38] },
@@ -56,16 +50,16 @@ const CONFIG = {
     { key: 'Battle-Scarred', short: 'BS', p: 0.14, float: [0.45, 1.00] },
   ],
   rarities: [
-    // Common → rare (must sum ≈1)
-    { key: 'Blue',   color: 'Mil-Spec',    p: 0.7992 },
-    { key: 'Purple', color: 'Restricted',  p: 0.1598 },
-    { key: 'Pink',   color: 'Classified',  p: 0.032  },
-    { key: 'Red',    color: 'Covert',      p: 0.0064 },
-    { key: 'Gold',   color: '★',           p: 0.0026 }, // knife/glove
+    // Odds approximate CS2 case odds (sum ≈ 1)
+    { key: 'Gold',   color: '★',          p: 0.0026 }, // 0.26%
+    { key: 'Red',    color: 'Covert',     p: 0.0064 }, // 0.64%
+    { key: 'Pink',   color: 'Classified', p: 0.032  },
+    { key: 'Purple', color: 'Restricted', p: 0.1598 },
+    { key: 'Blue',   color: 'Mil-Spec',   p: 0.7992 },
   ],
 };
 
-// ----------------- Case + Skin Data (starter) -----------------
+// ----------------- Case + Skin Data -----------------
 const CASES = {
   'Prisma 2 Case': {
     Blue: [
@@ -159,39 +153,20 @@ function ensureData() {
   if (!fs.existsSync(STATS_PATH)) fs.writeFileSync(STATS_PATH, JSON.stringify({ opens: 0, drops: {} }, null, 2));
   if (!fs.existsSync(DEFAULTS_PATH)) fs.writeFileSync(DEFAULTS_PATH, JSON.stringify({}, null, 2));
 }
-
 function loadJSON(p) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; } }
 function saveJSON(p, obj) { fs.writeFileSync(p, JSON.stringify(obj, null, 2)); }
 
 // ----------------- RNG Helpers -----------------
 function rng() { return Math.random(); }
-function weightedPick(items, weightProp = 'p') {
-  const r = rng();
-  let acc = 0;
-  for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; }
-  return items[items.length - 1];
-}
-function pickWear() {
-  const wear = weightedPick(CONFIG.wearTiers);
-  const [min, max] = wear.float;
-  const fl = +(min + rng() * (max - min)).toFixed(4);
-  return { ...wear, float: fl };
-}
-function pickRarity() { return weightedPick(CONFIG.rarities).key; }
-function pickSkin(caseKey, rarityKey) {
-  const pool = CASES[caseKey]?.[rarityKey] || [];
-  if (!pool.length) return null;
-  return pool[Math.floor(rng() * pool.length)];
-}
-function rollModifiers() {
-  const stattrak = rng() < CONFIG.stattrakChance;
-  const souvenir = CONFIG.souvenirChance > 0 && rng() < CONFIG.souvenirChance;
-  return { stattrak, souvenir };
-}
+function weightedPick(items, weightProp = 'p') { const r = rng(); let acc = 0; for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; } return items[items.length - 1]; }
+function pickWear() { const wear = weightedPick(CONFIG.wearTiers); const [min, max] = wear.float; const fl = +(min + rng() * (max - min)).toFixed(4); return { ...wear, float: fl }; }
+function pickRarity() { const pool = CONFIG.rarities.slice().reverse(); return weightedPick(pool).key; }
+function pickSkin(caseKey, rarityKey) { const pool = CASES[caseKey]?.[rarityKey] || []; if (!pool.length) return null; return pool[Math.floor(rng() * pool.length)]; }
+function rollModifiers() { const stattrak = rng() < CONFIG.stattrakChance; const souvenir = CONFIG.souvenirChance > 0 && rng() < CONFIG.souvenirChance; return { stattrak, souvenir }; }
 
 // ----------------- Core Sim -----------------
 function openOne(caseKey) {
-  const rarityKey = pickRarity(); // 'Blue','Purple','Pink','Red','Gold'
+  const rarityKey = pickRarity();
   const skin = pickSkin(caseKey, rarityKey);
   const wear = pickWear();
   const { stattrak, souvenir } = rollModifiers();
@@ -233,10 +208,8 @@ function addToInventory(user, drop) { const inv = loadJSON(INV_PATH); (inv[user]
 function getInventory(user) { const inv = loadJSON(INV_PATH); return inv[user] || []; }
 function pushStats(drop) { const s = loadJSON(STATS_PATH); s.opens=(s.opens||0)+1; s.drops=s.drops||{}; s.drops[drop.rarity]=(s.drops[drop.rarity]||0)+1; saveJSON(STATS_PATH,s); }
 function getStats() { const s = loadJSON(STATS_PATH); const total=s.opens||0; const by=s.drops||{}; const fmt=['Gold','Red','Pink','Purple','Blue'].map(r=>`${rarityEmoji(r)} ${r}: ${by[r]||0}`).join(' | '); return { total, fmt }; }
-function setDefaultCase(user, caseKey) { const d=loadJSON(DEFAULTS_PATH); d[user]=caseKey; saveJSON(DEFAULTS_PATH,d); }
-function getDefaultCase(user) { const d=loadJSON(DEFAULTS_PATH); return d[user] || CONFIG.defaultCaseKey; }
 
-// ----------------- Pricing Integration (Skinport + CSFloat) -----------------
+// ----------------- Pricing (Skinport + CSFloat) -----------------
 const PRICE_CFG = {
   provider: (process.env.PRICE_PROVIDER || 'best_of').toLowerCase(),
   currency: process.env.PRICE_CURRENCY || 'USD',
@@ -246,11 +219,7 @@ const PRICE_CFG = {
 const PRICE_CACHE_DIR = path.join(DATA_DIR, 'pricing');
 const SKINPORT_CACHE = path.join(PRICE_CACHE_DIR, 'skinport-items.json');
 const PRICE_CACHE = path.join(PRICE_CACHE_DIR, 'price-cache.json');
-function ensurePriceData() {
-  if (!fs.existsSync(PRICE_CACHE_DIR)) fs.mkdirSync(PRICE_CACHE_DIR, { recursive: true });
-  if (!fs.existsSync(SKINPORT_CACHE)) fs.writeFileSync(SKINPORT_CACHE, JSON.stringify({ fetchedAt: 0, items: [] }, null, 2));
-  if (!fs.existsSync(PRICE_CACHE)) fs.writeFileSync(PRICE_CACHE, JSON.stringify({}, null, 2));
-}
+function ensurePriceData() { if (!fs.existsSync(PRICE_CACHE_DIR)) fs.mkdirSync(PRICE_CACHE_DIR, { recursive: true }); if (!fs.existsSync(SKINPORT_CACHE)) fs.writeFileSync(SKINPORT_CACHE, JSON.stringify({ fetchedAt: 0, items: [] }, null, 2)); if (!fs.existsSync(PRICE_CACHE)) fs.writeFileSync(PRICE_CACHE, JSON.stringify({}, null, 2)); }
 function readPriceJSON(p, fallback) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fallback; } }
 function marketNameFromDrop(drop) {
   const wear = drop.wear;
@@ -267,7 +236,6 @@ function marketNameFromDrop(drop) {
 const PriceService = {
   _skinport: { fetchedAt: 0, map: new Map() },
   _cache: readPriceJSON(PRICE_CACHE, {}),
-
   async _fetchSkinportItems() {
     const now = Date.now();
     const cached = readPriceJSON(SKINPORT_CACHE, { fetchedAt: 0, items: [] });
@@ -283,16 +251,8 @@ const PriceService = {
     this._skinport.map = new Map(items.map(it => [it.market_hash_name, it]));
     fs.writeFileSync(SKINPORT_CACHE, JSON.stringify({ fetchedAt: now, items }, null, 2));
   },
-  _fromCache(marketHash) {
-    const c = this._cache[marketHash];
-    if (!c) return null;
-    if (Date.now() - (c.fetchedAt || 0) > PRICE_CFG.ttlMs) return null;
-    return c;
-  },
-  _saveCache(marketHash, obj) {
-    this._cache[marketHash] = obj;
-    fs.writeFileSync(PRICE_CACHE, JSON.stringify(this._cache, null, 2));
-  },
+  _fromCache(marketHash) { const c = this._cache[marketHash]; if (!c) return null; if (Date.now() - (c.fetchedAt || 0) > PRICE_CFG.ttlMs) return null; return c; },
+  _saveCache(marketHash, obj) { this._cache[marketHash] = obj; fs.writeFileSync(PRICE_CACHE, JSON.stringify(this._cache, null, 2)); },
   async _getFromSkinport(marketHash) {
     await this._fetchSkinportItems();
     const row = this._skinport.map.get(marketHash);
@@ -339,12 +299,9 @@ const PriceService = {
     return out;
   }
 };
-ensurePriceData();
-// warm and refresh skinport feed
-(async () => { try { await PriceService._fetchSkinportItems(); } catch {} })();
-setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, Math.max(PRICE_CFG.ttlMs, 300000));
 
 async function priceForMarketHash(marketHash) {
+  // Try cache first
   const cached = PriceService._fromCache(marketHash);
   if (cached) return cached;
   const provider = (process.env.PRICE_PROVIDER || 'best_of').toLowerCase();
@@ -362,65 +319,70 @@ async function priceForMarketHash(marketHash) {
   return out;
 }
 
-// ----------------- Value & Leaderboard -----------------
-async function ensurePriceOnDrop(drop) {
-  if (typeof drop.priceUSD === 'number') return drop.priceUSD;
-  try {
-    const p = await PriceService.priceForDrop(drop);
-    if (p && typeof p.usd === 'number') { drop.priceUSD = p.usd; return drop.priceUSD; }
-  } catch {}
-  return null;
-}
-async function inventoryValue(user) {
-  const items = getInventory(user);
-  let sum = 0;
-  for (const d of items) { const v = await ensurePriceOnDrop(d); if (typeof v === 'number') sum += v; }
-  return { totalUSD: +sum.toFixed(2), count: items.length };
-}
-function getAllInventories() { return loadJSON(INV_PATH) || {}; }
-async function leaderboardTop(n = 5) {
-  const inv = getAllInventories();
-  const rows = [];
-  for (const [user, items] of Object.entries(inv)) {
-    let sum = 0;
-    for (const d of items) { const v = await ensurePriceOnDrop(d); if (typeof v === 'number') sum += v; }
-    rows.push({ user, total: +sum.toFixed(2), count: items.length });
+// ---- Fuzzy helpers for !price (so users don't need exact names) ----
+function _tokens(s) { return (s||'').toLowerCase().replace(/™/g,'').split(/[^a-z0-9]+/).filter(Boolean); }
+function _expandWearAbbr(tokens) {
+  const out = [...tokens];
+  for (const t of tokens) {
+    if (t === 'fn') out.push('factory','new');
+    if (t === 'mw') out.push('minimal','wear');
+    if (t === 'ft') out.push('field','tested');
+    if (t === 'ww') out.push('well','worn');
+    if (t === 'bs') out.push('battle','scarred');
+    if (t === 'st') out.push('stattrak');
   }
-  rows.sort((a,b) => b.total - a.total);
-  return rows.slice(0, Math.max(1, Math.min(25, n)));
+  return out;
+}
+function _bestSkinportKeyForQuery(query) {
+  const map = PriceService._skinport && PriceService._skinport.map;
+  if (!map || map.size === 0) return null;
+  const qTokens = _expandWearAbbr(_tokens(query));
+  let bestKey = null, bestScore = 0;
+  for (const key of map.keys()) {
+    const k = key.toLowerCase().replace(/™/g,'');
+    let score = 0;
+    for (const t of qTokens) if (k.includes(t)) score++;
+    if (score > bestScore) { bestScore = score; bestKey = key; }
+  }
+  return bestScore >= 2 ? bestKey : null; // avoid super-loose matches
+}
+async function priceLookupFlexible(input) {
+  // 1) exact
+  let out = await priceForMarketHash(input);
+  if (out && out.usd != null) return { ...out, resolved: input };
+  // 2) fuzzy via Skinport catalog (if loaded)
+  const candidate = _bestSkinportKeyForQuery(input);
+  if (candidate) {
+    out = await priceForMarketHash(candidate);
+    if (out && out.usd != null) return { ...out, resolved: candidate };
+  }
+  return { usd: null, resolved: input };
 }
 
-// ----------------- Helpers -----------------
-function resolveCaseKey(input) {
-  if (!input) return null;
-  const exact = Object.keys(CASES).find(c => c.toLowerCase() === input.toLowerCase());
-  if (exact) return exact;
-  const fuzzy = Object.keys(CASES).find(c => c.toLowerCase().startsWith(input.toLowerCase()));
-  return fuzzy || null;
-}
+ensurePriceData();
+// warm and refresh skinport feed
+;(async () => { try { await PriceService._fetchSkinportItems(); } catch {} })();
+setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, Math.max(PRICE_CFG.ttlMs, 300000));
+
+// ----------------- Value & Leaderboard -----------------
+async function ensurePriceOnDrop(drop) { if (typeof drop.priceUSD === 'number') return drop.priceUSD; try { const p = await PriceService.priceForDrop(drop); if (p && typeof p.usd === 'number') { drop.priceUSD = p.usd; return drop.priceUSD; } } catch {} return null; }
+async function inventoryValue(user) { const items = getInventory(user); let sum = 0; for (const d of items) { const v = await ensurePriceOnDrop(d); if (typeof v === 'number') sum += v; } return { totalUSD: +sum.toFixed(2), count: items.length }; }
+function getAllInventories() { return loadJSON(INV_PATH) || {}; }
+async function leaderboardTop(n = 5) { const inv = getAllInventories(); const rows = []; for (const [user, items] of Object.entries(inv)) { let sum = 0; for (const d of items) { const v = await ensurePriceOnDrop(d); if (typeof v === 'number') sum += v; } rows.push({ user, total: +sum.toFixed(2), count: items.length }); } rows.sort((a,b)=>b.total-a.total); return rows.slice(0, Math.max(1, Math.min(25, n))); }
+
+// ----------------- Case resolution + cooldowns -----------------
+function resolveCaseKey(input) { if (!input) return null; const exact = Object.keys(CASES).find(c => c.toLowerCase() === input.toLowerCase()); if (exact) return exact; const fuzzy = Object.keys(CASES).find(c => c.toLowerCase().startsWith(input.toLowerCase())); return fuzzy || null; }
 const cdMap = new Map();
 const COOLDOWN_MS = 3000;
 function onCooldown(user) { const now = Date.now(); const last = cdMap.get(user) || 0; if (now - last < COOLDOWN_MS) return true; cdMap.set(user, now); return false; }
 
 // ----------------- Twitch Client -----------------
-const client = new tmi.Client({
-  options: { skipUpdatingEmotesets: true },
-  identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
-  channels: [process.env.TWITCH_CHANNEL],
-});
-
-client.connect().then(() => {
-  ensureData();
-  console.log('Case bot connected to', process.env.TWITCH_CHANNEL);
-}).catch(console.error);
+const client = new tmi.Client({ options: { skipUpdatingEmotesets: true }, identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH }, channels: [process.env.TWITCH_CHANNEL] });
+client.connect().then(() => { ensureData(); console.log('Case bot connected to', process.env.TWITCH_CHANNEL); }).catch(console.error);
 
 // Minimal HTTP health server for Render Web Service
 const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-  if (req.url === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Indicouch Case Bot OK');
-}).listen(PORT, () => console.log(`Health server listening on :${PORT}`));
+http.createServer((req, res) => { if (req.url === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); } res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('Indicouch Case Bot OK'); }).listen(PORT, () => console.log(`Health server listening on :${PORT}`));
 
 // ----------------- Commands -----------------
 const HELP_TEXT = [
@@ -429,7 +391,7 @@ const HELP_TEXT = [
   '!open <case> [xN] — open 1-10 cases',
   '!inv [@user] — show inventory',
   '!worth [@user] — inventory value (USD)',
-  '!price <market name> — price lookup',
+  "!price <market name>|last — price lookup (e.g., StatTrak™ AK-47 | Redline (Field-Tested) or 'last')",
   '!top [N] — leaderboard by inventory value',
   '!stats — global drop stats',
   '!setcase <case> — set default case',
@@ -450,17 +412,14 @@ client.on('message', async (channel, tags, message, self) => {
     case 'help':
       client.say(channel, HELP_TEXT);
       break;
-
     case 'cases':
       client.say(channel, `Available cases: ${Object.keys(CASES).join(' | ')}`);
       break;
-
     case 'mycase': {
       const current = getDefaultCase(user);
       client.say(channel, `@${user} your default case is: ${current}`);
       break;
     }
-
     case 'setcase': {
       const input = args.join(' ');
       const key = resolveCaseKey(input);
@@ -469,7 +428,6 @@ client.on('message', async (channel, tags, message, self) => {
       client.say(channel, `@${user} default case set to: ${key}`);
       break;
     }
-
     case 'open': {
       let count = 1;
       const xIdx = args.findIndex(a => /^x\d+$/i.test(a));
@@ -477,18 +435,13 @@ client.on('message', async (channel, tags, message, self) => {
       const caseInput = args.join(' ');
       const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(user);
       if (!caseKey) { client.say(channel, `@${user} pick a case with !cases or set one with !setcase <case>.`); break; }
-
       const results = [];
       for (let i = 0; i < count; i++) { const drop = openOne(caseKey); results.push(drop); addToInventory(user, drop); pushStats(drop); }
-
-      // Attach live prices (best effort)
       try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
-
       const lines = results.map(formatDrop).join('  |  ');
       client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
       break;
     }
-
     case 'inv': {
       const target = (args[0]?.replace('@','') || user).toLowerCase();
       const items = getInventory(target);
@@ -497,13 +450,11 @@ client.on('message', async (channel, tags, message, self) => {
       client.say(channel, `@${user} ${target}'s last ${Math.min(5, items.length)} drops: ${preview}  (Total: ${items.length})`);
       break;
     }
-
     case 'stats': {
       const s = getStats();
       client.say(channel, `Drops so far — Total opens: ${s.total} | ${s.fmt}`);
       break;
     }
-
     case 'worth': {
       const target = (args[0]?.replace('@','') || user).toLowerCase();
       const { totalUSD, count } = await inventoryValue(target);
@@ -511,20 +462,28 @@ client.on('message', async (channel, tags, message, self) => {
       client.say(channel, `@${user} ${target}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`);
       break;
     }
-
     case 'price': {
       const q = args.join(' ').trim();
-      if (!q) { client.say(channel, `@${user} usage: !price <market name> e.g., StatTrak™ AK-47 | Redline (Field-Tested)`); break; }
+      if (!q) { client.say(channel, `@${user} usage: !price <market name> — e.g., StatTrak™ AK-47 | Redline (Field-Tested) or !price last`); break; }
+      if (q.toLowerCase() === 'last') {
+        const items = getInventory(user);
+        if (!items.length) { client.say(channel, `@${user} you have no drops yet. Use !open first.`); break; }
+        const last = items[items.length - 1];
+        const mh = marketNameFromDrop(last);
+        const p = await priceForMarketHash(mh);
+        if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find price for your last drop.`); break; }
+        client.say(channel, `@${user} ${mh} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
+        break;
+      }
       try {
-        const p = await priceForMarketHash(q);
-        if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find a price for: ${q}`); break; }
-        client.say(channel, `@${user} ${q} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
+        const p = await priceLookupFlexible(q);
+        if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find price for: ${q}`); break; }
+        client.say(channel, `@${user} ${p.resolved} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
       } catch {
         client.say(channel, `@${user} price lookup failed.`);
       }
       break;
     }
-
     case 'top': {
       let n = 5;
       if (args[0] && /^\d+$/.test(args[0])) n = parseInt(args[0], 10);
@@ -534,15 +493,35 @@ client.on('message', async (channel, tags, message, self) => {
       client.say(channel, `Top ${rows.length} (by inventory value): ${line}`);
       break;
     }
-
     default:
       if (cmd) client.say(channel, `@${user} unknown command. ${HELP_TEXT}`);
       break;
   }
 });
 
-// ----------------- Notes -----------------
-// • This is a simulation; odds/wears are approximate, not official.
-// • Expand the CASES object or load from JSON for more coverage.
-// • Pricing pulls Skinport (USD) and optional CSFloat floors, with caching.
-// • Be cool with API limits; PRICE_TTL_MINUTES avoids hammering.
+// ----------------- Defaults helpers -----------------
+function setDefaultCase(user, caseKey) { const d = loadJSON(DEFAULTS_PATH); d[user] = caseKey; saveJSON(DEFAULTS_PATH, d); }
+function getDefaultCase(user) { const d = loadJSON(DEFAULTS_PATH); return d[user] || CONFIG.defaultCaseKey; }
+
+// ----------------- Health & Deploy Notes -----------------
+/*
+ZERO-SETUP HOSTING
+- Render Web Service: Build: npm ci, Start: node indicouch-case-bot.js
+- Env vars (Render → Environment):
+  TWITCH_USERNAME, TWITCH_OAUTH, TWITCH_CHANNEL, BOT_PREFIX, PRICE_PROVIDER=best_of, PRICE_CURRENCY=USD, CSFLOAT_API_KEY
+- This file already binds to process.env.PORT (health server), so Render sees it as healthy.
+
+Dockerfile (optional):
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+ENV PORT=3000
+EXPOSE 3000
+CMD ["node","indicouch-case-bot.js"]
+*/
+
+// Price feed warm-up (non-blocking)
+;(async () => { try { await PriceService._fetchSkinportItems(); } catch {} })();
+setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, Math.max(PRICE_CFG.ttlMs, 300000));

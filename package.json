@@ -1,6 +1,6 @@
 {
   "name": "indicouch-case-bot",
-  "version": "0.4.25",
+  "version": "0.4.26",
   "type": "module",
   "main": "indicouch-case-bot.js",
   "scripts": { "start": "node indicouch-case-bot.js" },

@@ -63,7 +63,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || null; // e.g., https://your-service
 const CONFIG = {
   prefix: process.env.BOT_PREFIX || '!',
   defaultCaseKey: 'Prisma 2 Case',
-  maxOpensPerCommand: 10,
+  maxOpensPerCommand: 5,
   stattrakChance: 0.10, // 10%
   souvenirChance: 0.00, // 0% (regular cases don't drop Souvenirs; leave 0)
   wearTiers: [

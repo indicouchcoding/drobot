@@ -525,6 +525,16 @@ client.on('message', async (channel, tags, message, self) => {
   const cmd = args.shift()?.toLowerCase();
 
   switch (cmd) {
+    case 'dro': {
+      const intro = `Yo, I’m Dro_bot_ v0.0.4.28 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
+      client.say(channel, intro);
+      break;
+    }
+    case 'drobot': {
+      const intro = `Yo, I’m Dro_bot_ v0.0.4.28 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
+      client.say(channel, intro);
+      break;
+    }
     case 'help':
       client.say(channel, HELP_TEXT);
       break;

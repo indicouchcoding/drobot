@@ -549,6 +549,71 @@ const CASES = {
       { weapon: '★ M9 Bayonet', name: 'Urban Masked' },
     ],
   },
+    // New: Glove Case (released Nov 28, 2016) — Rare Special = Gloves
+  'Glove Case': {
+    Blue: [
+      { weapon: 'Glock-18',    name: 'Ironwork' },
+      { weapon: 'CZ75-Auto',   name: 'Polymer' },
+      { weapon: 'P2000',       name: 'Turf' },
+      { weapon: 'MP7',         name: 'Cirrus' },
+      { weapon: 'MP9',         name: 'Sand Scale' },
+      { weapon: 'MAG-7',       name: 'Sonar' },
+      { weapon: 'Galil AR',    name: 'Black Sand' },
+    ],
+    Purple: [
+      { weapon: 'USP-S',       name: 'Cyrex' },
+      { weapon: 'M4A1-S',      name: 'Flashback' },
+      { weapon: 'Dual Berettas', name: 'Royal Consorts' },
+      { weapon: 'G3SG1',       name: 'Stinger' },
+      { weapon: 'Nova',        name: 'Gila' },
+    ],
+    Pink: [
+      { weapon: 'FAMAS',       name: 'Mecha Industries' },
+      { weapon: 'P90',         name: 'Shallow Grave' },
+      { weapon: 'Sawed-Off',   name: 'Wasteland Princess' },
+    ],
+    Red: [
+      { weapon: 'M4A4',        name: 'Buzz Kill' },
+      { weapon: 'SSG 08',      name: 'Dragonfire' },
+    ],
+    Gold: [
+      // Bloodhound Gloves
+      { weapon: '★ Bloodhound Gloves', name: 'Snakebite' },
+      { weapon: '★ Bloodhound Gloves', name: 'Bronzed' },
+      { weapon: '★ Bloodhound Gloves', name: 'Guerrilla' },
+      { weapon: '★ Bloodhound Gloves', name: 'Charred' },
+
+      // Driver Gloves
+      { weapon: '★ Driver Gloves', name: 'Crimson Weave' },
+      { weapon: '★ Driver Gloves', name: 'Lunar Weave' },
+      { weapon: '★ Driver Gloves', name: 'Diamondback' },
+      { weapon: '★ Driver Gloves', name: 'Convoy' },
+
+      // Hand Wraps
+      { weapon: '★ Hand Wraps', name: 'Slaughter' },
+      { weapon: '★ Hand Wraps', name: 'Badlands' },
+      { weapon: '★ Hand Wraps', name: 'Spruce DDPAT' },
+      { weapon: '★ Hand Wraps', name: 'Leather' },
+
+      // Moto Gloves
+      { weapon: '★ Moto Gloves', name: 'Spearmint' },
+      { weapon: '★ Moto Gloves', name: 'Cool Mint' },
+      { weapon: '★ Moto Gloves', name: 'Boom!' },
+      { weapon: '★ Moto Gloves', name: 'Eclipse' },
+
+      // Specialist Gloves
+      { weapon: '★ Specialist Gloves', name: 'Crimson Kimono' },
+      { weapon: '★ Specialist Gloves', name: 'Emerald Web' },
+      { weapon: '★ Specialist Gloves', name: 'Foundation' },
+      { weapon: '★ Specialist Gloves', name: 'Forest DDPAT' },
+
+      // Sport Gloves
+      { weapon: '★ Sport Gloves', name: "Pandora's Box" },
+      { weapon: '★ Sport Gloves', name: 'Arid' },
+      { weapon: '★ Sport Gloves', name: 'Superconductor' },
+      { weapon: '★ Sport Gloves', name: 'Hedge Maze' },
+    ],
+  },
 };
 
 // ----------------- Persistence -----------------
@@ -584,6 +649,11 @@ function openOne(caseKey) {
   const skin = pickSkin(caseKey, rarityKey);
   const wear = pickWear();
   const { stattrak, souvenir } = rollModifiers();
+    // Gloves don’t have StatTrak or Souvenir → force off
+  if ((drop.weapon || '').toLowerCase().includes('glove')) {
+    drop.stattrak = false;
+    drop.souvenir = false;
+  }
   return {
     case: caseKey,
     rarity: rarityKey,
@@ -946,15 +1016,22 @@ function readPriceJSON(p, fallback) { try { return JSON.parse(fs.readFileSync(p,
 
 function marketNameFromDrop(drop) {
   const wear = drop.wear;
-  const isKnife = (drop.weapon || '').startsWith('★');
+  const w = drop.weapon || '';
+  const isStar = w.startsWith('★');
+  const isGlove = /\bgloves?\b/i.test(w) || /hand wraps/i.test(w);
   const souv = drop.souvenir ? 'Souvenir ' : '';
-  if (isKnife) {
-    const knifeName = drop.weapon.replace('★', '').trim();
-    const starPart = '★ ' + (drop.stattrak ? 'StatTrak™ ' : '');
-    return (souv + starPart + knifeName + ' | ' + drop.name + ' (' + wear + ')').trim();
+
+  if (isStar) {
+    // Knives & gloves both use the star; gloves never have StatTrak™
+    const label = w.replace('★', '').trim();
+    const maybeST = (drop.stattrak && !isGlove) ? 'StatTrak™ ' : '';
+    const name = (souv + '★ ' + maybeST + label + ' | ' + drop.name + ' (' + wear + ')').trim();
+    return _sanitizeGloveST(name);
   }
+
+  // Regular guns can be StatTrak™
   const st = drop.stattrak ? 'StatTrak™ ' : '';
-  return (souv + st + drop.weapon + ' | ' + drop.name + ' (' + wear + ')').trim();
+  return (souv + st + w + ' | ' + drop.name + ' (' + wear + ')').trim();
 }
 
 const PriceService = {
@@ -1034,7 +1111,29 @@ ensurePriceData();
 function _tokens(s) { return (s||'').toLowerCase().replace(/™/g,'').split(/[^a-z0-9]+/).filter(Boolean); }
 function _expandWearAbbr(tokens) { const out=[...tokens]; for (const t of tokens) { if (t==='fn') out.push('factory','new'); if (t==='mw') out.push('minimal','wear'); if (t==='ft') out.push('field','tested'); if (t==='ww') out.push('well','worn'); if (t==='bs') out.push('battle','scarred'); if (t==='st') out.push('stattrak'); } return out; }
 function _bestSkinportKeyForQuery(query) { const map = PriceService._skinport && PriceService._skinport.map; if (!map || map.size===0) return null; const qTokens=_expandWearAbbr(_tokens(query)); let bestKey=null, bestScore=0; for (const key of map.keys()) { const k=key.toLowerCase().replace(/™/g,''); let score=0; for (const t of qTokens) if (k.includes(t)) score++; if (score>bestScore) { bestScore=score; bestKey=key; } } return bestScore>=2?bestKey:null; }
-async function priceLookupFlexible(input) { let out=await priceForMarketHash(input); if (out && out.usd!=null) return { ...out, resolved: input }; const candidate=_bestSkinportKeyForQuery(input); if (candidate) { out=await priceForMarketHash(candidate); if (out && out.usd!=null) return { ...out, resolved: candidate }; } return { usd: null, resolved: input }; }
+async function priceLookupFlexible(input) {
+  const cleaned = _sanitizeGloveST(input);
+  // 1) exact
+  let out = await priceForMarketHash(cleaned);
+  if (out && out.usd != null) return { ...out, resolved: cleaned };
+  // 2) fuzzy via Skinport catalog (if loaded)
+  const candidate = _bestSkinportKeyForQuery(cleaned);
+  if (candidate) {
+    out = await priceForMarketHash(candidate);
+    if (out && out.usd != null) return { ...out, resolved: candidate };
+  }
+  return { usd: null, resolved: cleaned };
+}
+
+// Remove illegal "StatTrak™" from glove market names users might type
+function _sanitizeGloveST(name) {
+  // Matches: "★ StatTrak™ Sport Gloves | ..." → "★ Sport Gloves | ..."
+  // Also covers Bloodhound/Driver/Hand Wraps/Moto/Specialist/Sport
+  return String(name).replace(
+    /(★\s+)(?:StatTrak™\s+)?((?:Bloodhound|Driver|Hand\s+Wraps|Moto|Specialist|Sport)\s+Gloves)/i,
+    '$1$2'
+  );
+}
 
 // kick off initial price prefetch in background (non-blocking)
 (async () => { try { await PriceService._fetchSkinportItems(); } catch (e) { /* ignore */ } })();

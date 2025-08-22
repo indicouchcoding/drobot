@@ -663,6 +663,19 @@ client.on('message', async (channel, tags, message, self) => {
       const all = getInventory(targetUser).filter(it => it.rarity === rarityKey);
       if (!all.length) { client.say(channel, `@${user} ${targetUser} has no ${rarityKey} items yet.`); break; }
 
+      // Ensure we have prices so we can filter/sort
+      try { await Promise.all(all.map(d => ensurePriceOnDrop(d))); } catch {}
+
+      const priced = all.filter(d => typeof d.priceUSD === 'number');
+      const pricedAbove = priced.filter(d => d.priceUSD >= PRICE_CHAT_FLOOR);
+      const pricedBelow = priced.filter(d => d.priceUSD < PRICE_CHAT_FLOOR);
+      const unknown = all.filter(d => typeof d.priceUSD !== 'number');
+
+      // Sort priced-above-threshold by price desc; unknowns after
+      pricedAbove.sort((a,b)=> (b.priceUSD||0) - (a.priceUSD||0));
+      const display = pricedAbove.concat(unknown);
+      const hiddenCount = pricedBelow.length;
+
       const basic = (d) => {
         const parts = [];
         if (d.souvenir) parts.push('Souvenir');
@@ -672,18 +685,32 @@ client.on('message', async (channel, tags, message, self) => {
         return `${prefix}${d.weapon} | ${d.name} (${wearShort})`;
       };
 
-      const header = `@${user} [${rarityEmoji(rarityKey)} ${rarityKey}] ${all.length} item(s)` + (targetUser!==user?` for @${targetUser}`:'') + ':';
-
-      // If many items, avoid spam: show a single line with Top 3 latest, then a "+N more" summary
-      if (all.length > 20) {
-        const top3 = all.slice(-3).reverse().map(basic).join(' | ');
-        const more = Math.max(0, all.length - 3);
-        client.say(channel, `${header} Top 3 latest: ${top3}` + (more?`  |  +${more} more`:'') );
+      if (display.length === 0) {
+        client.say(channel, `@${user} no ${rarityKey} items ≥ $${PRICE_CHAT_FLOOR} (hidden ${hiddenCount} under $${PRICE_CHAT_FLOOR}).`);
         break;
       }
 
-      // Otherwise list them (chunked safely)
-      const lines = all.map(basic);
+      const header = `@${user} [${rarityEmoji(rarityKey)} ${rarityKey}] ${display.length} item(s)` + (targetUser!==user?` for @${targetUser}`:'') + (hiddenCount?` (+${hiddenCount} hidden < $${PRICE_CHAT_FLOOR})`:'') + ':';
+
+      // If many items, avoid spam: show a single line with Top 3 then counts
+      if (display.length > 20) {
+        const top3 = display.slice(0,3).map(basic).join(' | ');
+        const more = display.length - 3;
+        const suffixParts = [];
+        if (more > 0) suffixParts.push(`+${more} more ≥ $${PRICE_CHAT_FLOOR}`);
+        if (hiddenCount > 0) suffixParts.push(`+${hiddenCount} hidden < $${PRICE_CHAT_FLOOR}`);
+        const suffix = suffixParts.length ? `  |  ${suffixParts.join(' ; ')}` : '';
+        client.say(channel, `${header} Top 3: ${top3}${suffix}`);
+        break;
+      }
+
+      // Otherwise, list (top 3 first, then the rest) and chunk if needed
+      const lines = display.map(basic);
+      await sayChunkedList(channel, header, lines);
+      break;
+    }
+
+      // ≤20 items → safe to chunk if needed
       await sayChunkedList(channel, header, lines);
       break;
     }
@@ -749,6 +776,10 @@ client.on('message', async (channel, tags, message, self) => {
 });
 
 // ----------------- Pricing (Skinport + CSFloat) -----------------
+$1
+// Minimum price to include items in chat for !invlist (to reduce spam)
+const PRICE_CHAT_FLOOR = parseFloat(process.env.PRICE_CHAT_FLOOR || '5');
+
 const PRICE_CACHE_DIR = path.join(DATA_DIR, 'pricing');
 const SKINPORT_CACHE = path.join(PRICE_CACHE_DIR, 'skinport-items.json');
 const PRICE_CACHE = path.join(PRICE_CACHE_DIR, 'price-cache.json');
@@ -855,8 +886,7 @@ async function priceLookupFlexible(input) { let out=await priceForMarketHash(inp
 
 // kick off initial price prefetch in background (non-blocking)
 (async () => { try { await PriceService._fetchSkinportItems(); } catch (e) { /* ignore */ } })();
-const PRICE_REFRESH_MS = Math.max(parseInt(process.env.PRICE_TTL_MINUTES || '10', 10) * 60000, 300000);
-setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, PRICE_REFRESH_MS);
+setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, Math.max(PRICE_CFG.ttlMs, 300000));
 
 client.on('disconnected', (reason) => console.log(`[indicouch:${INSTANCE_ID}] disconnected:`, reason));
 function gracefulExit() { console.log(`[indicouch:${INSTANCE_ID}] shutting down`); try { client.disconnect(); } catch {} process.exit(0); }

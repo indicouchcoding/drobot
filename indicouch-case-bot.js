@@ -467,7 +467,7 @@ function isModOrBroadcaster(tags) { const badges = tags.badges || {}; return !!t
 const HELP_TEXT = [
   `Commands:`,
   `!cases — list cases`,
-  `!open <case> [xN] — open 1-10 cases`,
+  `!open <case> [xN|N] — open 1-100 cases`,
   `!inv [@user] — show inventory`,
   `!worth [@user] — inventory value (USD)`,
   `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,
@@ -583,10 +583,15 @@ client.on('message', async (channel, tags, message, self) => {
     case 'open': {
       // !open <case words...> [xN]
       let count = 1;
-      const xIdx = args.findIndex(a => /^x\d+$/i.test(a));
-      if (xIdx >= 0) {
-        count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(args[xIdx].slice(1), 10)));
-        args.splice(xIdx, 1);
+      // accept quantity as last token: either "xN" or just "N"
+      let qtyIdx = -1; let qtyMatch = null;
+      for (let i = args.length - 1; i >= 0; i--) {
+        const m = /^x?([0-9]+)$/i.exec(args[i]);
+        if (m) { qtyIdx = i; qtyMatch = m; break; }
+      }
+      if (qtyIdx >= 0) {
+        count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(qtyMatch[1], 10)));
+        args.splice(qtyIdx, 1);
       }
       const caseInput = args.join(' ');
       const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(user);

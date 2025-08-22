@@ -653,29 +653,13 @@ client.on('message', async (channel, tags, message, self) => {
       const rarityArg = (args[0] || '').toLowerCase();
       const rarityKey = normalizeRarity(rarityArg);
       if (!rarityKey) { client.say(channel, `@${user} usage: !invlist <gold|red|pink|purple|blue> [@user]`); break; }
-
       let targetUser = user;
       if (args[1]) {
         const maybe = args[1].replace('@','').toLowerCase();
         if (isModOrBroadcaster(tags)) targetUser = maybe; else { client.say(channel, `@${user} mods/broadcaster only to target another user.`); break; }
       }
-
-      const all = getInventory(targetUser).filter(it => it.rarity === rarityKey);
-      if (!all.length) { client.say(channel, `@${user} ${targetUser} has no ${rarityKey} items yet.`); break; }
-
-      // Ensure we have prices so we can filter/sort
-      try { await Promise.all(all.map(d => ensurePriceOnDrop(d))); } catch {}
-
-      const priced = all.filter(d => typeof d.priceUSD === 'number');
-      const pricedAbove = priced.filter(d => d.priceUSD >= PRICE_CHAT_FLOOR);
-      const pricedBelow = priced.filter(d => d.priceUSD < PRICE_CHAT_FLOOR);
-      const unknown = all.filter(d => typeof d.priceUSD !== 'number');
-
-      // Sort priced-above-threshold by price desc; unknowns after
-      pricedAbove.sort((a,b)=> (b.priceUSD||0) - (a.priceUSD||0));
-      const display = pricedAbove.concat(unknown);
-      const hiddenCount = pricedBelow.length;
-
+      const items = getInventory(targetUser).filter(it => it.rarity === rarityKey);
+      if (!items.length) { client.say(channel, `@${user} ${targetUser} has no ${rarityKey} items yet.`); break; }
       const basic = (d) => {
         const parts = [];
         if (d.souvenir) parts.push('Souvenir');
@@ -684,34 +668,9 @@ client.on('message', async (channel, tags, message, self) => {
         const wearShort = (d.wear || '').split(' ').map(s => s[0]).join('');
         return `${prefix}${d.weapon} | ${d.name} (${wearShort})`;
       };
-
-      if (display.length === 0) {
-        client.say(channel, `@${user} no ${rarityKey} items ≥ $${PRICE_CHAT_FLOOR} (hidden ${hiddenCount} under $${PRICE_CHAT_FLOOR}).`);
-        break;
-      }
-
-      const header = `@${user} [${rarityEmoji(rarityKey)} ${rarityKey}] ${display.length} item(s)` + (targetUser!==user?` for @${targetUser}`:'') + (hiddenCount?` (+${hiddenCount} hidden < $${PRICE_CHAT_FLOOR})`:'') + ':';
-
-      // If many items, avoid spam: show a single line with Top 3 then counts
-      if (display.length > 20) {
-        const top3 = display.slice(0,3).map(basic).join(' | ');
-        const more = display.length - 3;
-        const suffixParts = [];
-        if (more > 0) suffixParts.push(`+${more} more ≥ $${PRICE_CHAT_FLOOR}`);
-        if (hiddenCount > 0) suffixParts.push(`+${hiddenCount} hidden < $${PRICE_CHAT_FLOOR}`);
-        const suffix = suffixParts.length ? `  |  ${suffixParts.join(' ; ')}` : '';
-        client.say(channel, `${header} Top 3: ${top3}${suffix}`);
-        break;
-      }
-
-      // Otherwise, list (top 3 first, then the rest) and chunk if needed
-      const lines = display.map(basic);
-      await sayChunkedList(channel, header, lines);
-      break;
-    }
-
-      // ≤20 items → safe to chunk if needed
-      await sayChunkedList(channel, header, lines);
+      const lines = items.map(basic);
+      const head = `@${user} [${rarityEmoji(rarityKey)} ${rarityKey}] ${items.length} item(s)` + (targetUser!==user?` for @${targetUser}`:'') + ':';
+      await sayChunkedList(channel, head, lines);
       break;
     }
     case 'stats': {
@@ -776,9 +735,12 @@ client.on('message', async (channel, tags, message, self) => {
 });
 
 // ----------------- Pricing (Skinport + CSFloat) -----------------
-$1
-// Minimum price to include items in chat for !invlist (to reduce spam)
-const PRICE_CHAT_FLOOR = parseFloat(process.env.PRICE_CHAT_FLOOR || '5');
+const PRICE_CFG = {
+  provider: (process.env.PRICE_PROVIDER || 'best_of').toLowerCase(),
+  currency: process.env.PRICE_CURRENCY || 'USD',
+  ttlMs: (parseInt(process.env.PRICE_TTL_MINUTES || '10', 10) * 60000),
+  csfloatKey: process.env.CSFLOAT_API_KEY || null,
+};
 
 const PRICE_CACHE_DIR = path.join(DATA_DIR, 'pricing');
 const SKINPORT_CACHE = path.join(PRICE_CACHE_DIR, 'skinport-items.json');

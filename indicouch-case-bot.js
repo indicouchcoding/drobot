@@ -599,6 +599,19 @@ function openOne(caseKey) {
 // ----------------- Formatting -----------------
 function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'🩷':rarity==='Purple'?'🟣':'🔵'; }
 function formatDrop(drop) { const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak'); const prefix=parts.length?parts.join(' ')+' ':''; const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join(''); const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:''; return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`; }
+// --- Sort helper: higher tiers first, then higher $ value, then lower float ---
+const RARITY_RANK = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
+function sortByTierThenValue(a, b) {
+  const ra = RARITY_RANK[a.rarity] || 0;
+  const rb = RARITY_RANK[b.rarity] || 0;
+  if (ra !== rb) return rb - ra;                         // higher tier first
+  const va = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
+  const vb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
+  if (va !== vb) return vb - va;                         // higher $ first
+  const fa = (typeof a.float === 'number') ? a.float : 1;
+  const fb = (typeof b.float === 'number') ? b.float : 1;
+  return fa - fb;                                        // lower float first
+}
 
 // ---- Rarity parsing + chunked chat sender ----
 function normalizeRarity(input) {
@@ -782,21 +795,24 @@ client.on('message', async (channel, tags, message, self) => {
       try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
 
       if (count <= 5) {
-        const lines = results.map(formatDrop).join('  |  ');
-        client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
-        break;
+      const sorted = [...results].sort(sortByTierThenValue);
+      const lines = sorted.map(formatDrop).join('  |  ');
+      client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
+      break;
       }
 
-      // Beyond 5: show first 5 items, then summarize the rest by value + highlights
-      const head = results.slice(0, 5).map(formatDrop).join('  |  ');
-      const tail = results.slice(5);
 
-      let tailValue = 0;
-      for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
+    // Beyond 5: sort everything by tier/value first
+    const sortedAll = [...results].sort(sortByTierThenValue);
+    const head = sortedAll.slice(0, 5).map(formatDrop).join('  |  ');
+    const tail = sortedAll.slice(5);
 
-      const reds = tail.filter(d => d.rarity === 'Red').length;
-      const golds = tail.filter(d => d.rarity === 'Gold').length;
-      const lowFloat = tail.filter(d => d.float <= 0.05).length; // highlight super low floats
+    let tailValue = 0;
+    for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
+
+    const reds  = tail.filter(d => d.rarity === 'Red').length;
+    const golds = tail.filter(d => d.rarity === 'Gold').length;
+    const lowFloat = tail.filter(d => d.float <= 0.05).length; // highlight super low floats
 
       const highlights = [
         golds ? `✨x${golds}` : null,

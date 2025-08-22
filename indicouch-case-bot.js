@@ -426,18 +426,18 @@ function openOne(caseKey) {
 function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'🩷':rarity==='Purple'?'🟣':'🔵'; }
 function formatDrop(drop) { const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak'); const prefix=parts.length?parts.join(' ')+' ':''; const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join(''); const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:''; return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`; }
 
-// ---- Whisper helpers and rarity parsing ----
+// ---- Rarity parsing + chunked chat sender ----
 function normalizeRarity(input) {
   if (!input) return null;
   const t = String(input).toLowerCase();
   if (t === 'gold' || t === '✨' || t === 'yellow' || t === 'knife' || t === 'glove') return 'Gold';
   if (t === 'red' || t === 'covert' || t === '🔴') return 'Red';
-  if (t === 'pink' || t === 'classified' || t === '🩷') return 'Pink';
+  if (t === 'pink' || t === 'classified' || t === '🩷' || t === '🟠') return 'Pink';
   if (t === 'purple' || t === 'restricted' || t === '🟣') return 'Purple';
   if (t === 'blue' || t === 'mil-spec' || t === '🔵') return 'Blue';
   return null;
 }
-async function whisperList(toUser, header, lines) {
+async function sayChunkedList(channel, header, lines) {
   const chunks = [];
   let buf = header;
   for (const ln of lines) {
@@ -446,7 +446,7 @@ async function whisperList(toUser, header, lines) {
   }
   if (buf) chunks.push(buf);
   for (const c of chunks) {
-    try { await client.whisper(toUser, c); } catch (e) { console.log('[whisper error]', e?.message || e); }
+    try { await client.say(channel, c); } catch (e) { console.log('[chat chunk error]', e?.message || e); }
   }
 }
 
@@ -472,7 +472,7 @@ const HELP_TEXT = [
   `!worth [@user] — inventory value (USD)`,
   `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,
   `!top [N] — leaderboard by inventory value`,
-  `!invlist <rarity> — whisper your items of that rarity`,
+  `!invlist <rarity> [@user] — list your items of that rarity (mods can target @user)`,
   `!stats — global drop stats`,
   `!setcase <case> — set default case`,
   `!mycase — show your default case`,
@@ -644,15 +644,28 @@ client.on('message', async (channel, tags, message, self) => {
       break;
     }
     case 'invlist': {
-      const login = (tags.username || '').toLowerCase();
+      // Usage: !invlist <rarity> [@user]
       const rarityArg = (args[0] || '').toLowerCase();
       const rarityKey = normalizeRarity(rarityArg);
-      if (!rarityKey) { client.say(channel, `@${user} usage: !invlist <gold|red|pink|purple|blue>`); break; }
-      const items = getInventory(user).filter(it => it.rarity === rarityKey);
-      if (!items.length) { client.say(channel, `@${user} no ${rarityKey} items yet.`); break; }
-      const lines = items.map(formatDrop);
-      await whisperList(login, `[${rarityEmoji(rarityKey)} ${rarityKey}] ${items.length} item(s):`, lines);
-      client.say(channel, `@${user} whispered your ${rarityKey} items.`);
+      if (!rarityKey) { client.say(channel, `@${user} usage: !invlist <gold|red|pink|purple|blue> [@user]`); break; }
+      let targetUser = user;
+      if (args[1]) {
+        const maybe = args[1].replace('@','').toLowerCase();
+        if (isModOrBroadcaster(tags)) targetUser = maybe; else { client.say(channel, `@${user} mods/broadcaster only to target another user.`); break; }
+      }
+      const items = getInventory(targetUser).filter(it => it.rarity === rarityKey);
+      if (!items.length) { client.say(channel, `@${user} ${targetUser} has no ${rarityKey} items yet.`); break; }
+      const basic = (d) => {
+        const parts = [];
+        if (d.souvenir) parts.push('Souvenir');
+        if (d.stattrak) parts.push('StatTrak');
+        const prefix = parts.length ? parts.join(' ') + ' ' : '';
+        const wearShort = (d.wear || '').split(' ').map(s => s[0]).join('');
+        return `${prefix}${d.weapon} | ${d.name} (${wearShort})`;
+      };
+      const lines = items.map(basic);
+      const head = `@${user} [${rarityEmoji(rarityKey)} ${rarityKey}] ${items.length} item(s)` + (targetUser!==user?` for @${targetUser}`:'') + ':';
+      await sayChunkedList(channel, head, lines);
       break;
     }
     case 'stats': {

@@ -523,6 +523,8 @@ client.on('message', async (channel, tags, message, self) => {
 
   const args = message.slice(CONFIG.prefix.length).trim().split(/\s+/);
   const cmd = args.shift()?.toLowerCase();
+      const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','stats','worth','price','top','backupurl','dro','drobot']);
+      if (!ALLOWED_CMDS.has(cmd)) return; // ignore non-bot commands like !so, !uptime, etc.
 
   switch (cmd) {
     case 'dro': {
@@ -579,22 +581,13 @@ client.on('message', async (channel, tags, message, self) => {
       const items = getInventory(target);
       if (items.length === 0) { client.say(channel, `@${user} ${target} has an empty inventory. Use !open to pull some heat.`); break; }
 
-      // Build rarity counts + short previews per rarity (latest 2 items each)
-      const order = ['Gold','Red','Pink','Purple','Blue'];
+      // Count rarities only (no item previews)
       const counts = { Gold:0, Red:0, Pink:0, Purple:0, Blue:0 };
-      for (const it of items) { if (counts[it.rarity] != null) counts[it.rarity]++; }
+      for (const it of items) if (counts[it.rarity] != null) counts[it.rarity]++;
+      const order = ['Gold','Red','Pink','Purple','Blue'];
+      const parts = order.map(r => `${rarityEmoji(r)} ${r}: ${counts[r] || 0}`).join(' | ');
 
-      const groups = [];
-      for (const r of order) {
-        const c = counts[r] || 0;
-        if (!c) continue;
-        const recent = items.filter(it => it.rarity === r).slice(-2).map(formatDrop).join(' | ');
-        const em = rarityEmoji(r);
-        groups.push(`${em} ${r} x${c}${recent ? `: ${recent}` : ''}`);
-      }
-
-      const line = groups.join('  ||  ');
-      client.say(channel, `@${user} ${target}'s inventory (${items.length} items) — ${line}`);
+      client.say(channel, `@${user} ${target}'s inventory (${items.length} items) — ${parts}`);
       break;
     }
     case 'stats': {
@@ -644,7 +637,7 @@ client.on('message', async (channel, tags, message, self) => {
       break;
     }
     default:
-      if (cmd) client.say(channel, `@${user} unknown command. ${HELP_TEXT}`);
+      // ignore unknown commands silently to avoid clashing with other bots
       break;
   }
 });

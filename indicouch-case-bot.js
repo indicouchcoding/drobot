@@ -554,58 +554,58 @@ client.on('message', async (channel, tags, message, self) => {
       setDefaultCase(user, key);
       client.say(channel, `@${user} default case set to: ${key}`);
       break;
+    }
     case 'open': {
-  // !open <case words...> [xN]
-  let count = 1;
-  const xIdx = args.findIndex(a => /^x\d+$/i.test(a));
-  if (xIdx >= 0) {
-    count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(args[xIdx].slice(1), 10)));
-    args.splice(xIdx, 1);
-  }
-  const caseInput = args.join(' ');
-  const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(user);
-  if (!caseKey) { client.say(channel, `@${user} pick a case with !cases or set one with !setcase <case>.`); break; }
+      // !open <case words...> [xN]
+      let count = 1;
+      const xIdx = args.findIndex(a => /^x\d+$/i.test(a));
+      if (xIdx >= 0) {
+        count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(args[xIdx].slice(1), 10)));
+        args.splice(xIdx, 1);
+      }
+      const caseInput = args.join(' ');
+      const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(user);
+      if (!caseKey) { client.say(channel, `@${user} pick a case with !cases or set one with !setcase <case>.`); break; }
 
-  const results = [];
-  for (let i = 0; i < count; i++) {
-    const drop = openOne(caseKey);
-    results.push(drop);
-    addToInventory(user, drop);
-    pushStats(drop);
-  }
+      const results = [];
+      for (let i = 0; i < count; i++) {
+        const drop = openOne(caseKey);
+        results.push(drop);
+        addToInventory(user, drop);
+        pushStats(drop);
+      }
 
-  try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
+      try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
 
-  if (count <= 5) {
-    const lines = results.map(formatDrop).join('  |  ');
-    client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
-    break;
-  }
+      if (count <= 5) {
+        const lines = results.map(formatDrop).join('  |  ');
+        client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
+        break;
+      }
 
-  // Summarize beyond 5: show first 5, then money + highlights (Gold/Red/low-float)
-  const head = results.slice(0, 5).map(formatDrop).join('  |  ');
-  const tail = results.slice(5);
+      // Beyond 5: show first 5 items, then summarize the rest by value + highlights
+      const head = results.slice(0, 5).map(formatDrop).join('  |  ');
+      const tail = results.slice(5);
 
-  let tailValue = 0;
-  for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
+      let tailValue = 0;
+      for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
 
-  const reds = tail.filter(d => d.rarity === 'Red').length;
-  const golds = tail.filter(d => d.rarity === 'Gold').length;
-  const lowFloat = tail.filter(d => d.float <= 0.05).length; // super low floats
+      const reds = tail.filter(d => d.rarity === 'Red').length;
+      const golds = tail.filter(d => d.rarity === 'Gold').length;
+      const lowFloat = tail.filter(d => d.float <= 0.05).length; // highlight super low floats
 
-  const highlights = [
-    golds ? `✨x${golds}` : null,
-    reds ? `🔴x${reds}` : null,
-    lowFloat ? `⬇️x${lowFloat}` : null,
-  ].filter(Boolean).join(' ');
+      const highlights = [
+        golds ? `✨x${golds}` : null,
+        reds ? `🔴x${reds}` : null,
+        lowFloat ? `⬇️x${lowFloat}` : null,
+      ].filter(Boolean).join(' ');
 
-  const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
-  const hl = highlights ? ` Highlights: ${highlights}` : '';
+      const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
+      const hl = highlights ? ` Highlights: ${highlights}` : '';
 
-  client.say(channel, `@${user} opened ${count}x ${caseKey}: ${head}  |  ${more}.${hl}`);
-  break;
-}
-
+      client.say(channel, `@${user} opened ${count}x ${caseKey}: ${head}  |  ${more}.${hl}`);
+      break;
+    }
     case 'inv': {
       const target = (args[0]?.replace('@','') || user).toLowerCase();
       const items = getInventory(target);

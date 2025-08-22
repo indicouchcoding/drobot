@@ -63,7 +63,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || null; // e.g., https://your-service
 const CONFIG = {
   prefix: process.env.BOT_PREFIX || '!',
   defaultCaseKey: 'Prisma 2 Case',
-  maxOpensPerCommand: 10,
+  maxOpensPerCommand: 100,
   stattrakChance: 0.10, // 10%
   souvenirChance: 0.00, // 0% (regular cases don't drop Souvenirs; leave 0)
   wearTiers: [
@@ -423,7 +423,7 @@ function openOne(caseKey) {
 }
 
 // ----------------- Formatting -----------------
-function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'🟣':rarity==='Purple'?'🟪':'🔵'; }
+function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'🩷':rarity==='Purple'?'🟣':'🔵'; }
 function formatDrop(drop) { const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak'); const prefix=parts.length?parts.join(' ')+' ':''; const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join(''); const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:''; return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`; }
 
 // ----------------- Inventories & Stats -----------------
@@ -554,7 +554,7 @@ client.on('message', async (channel, tags, message, self) => {
       setDefaultCase(user, key);
       client.say(channel, `@${user} default case set to: ${key}`);
       break;
-case 'open': {
+    case 'open': {
   // !open <case words...> [xN]
   let count = 1;
   const xIdx = args.findIndex(a => /^x\d+$/i.test(a));
@@ -626,10 +626,19 @@ case 'open': {
       break;
     }
     case 'worth': {
-      const target = (args[0]?.replace('@','') || user).toLowerCase();
+      const rawTarget = (args[0]?.replace('@','') || user).toLowerCase();
+      const isSelf = rawTarget === user;
+      const target = rawTarget;
       const { totalUSD, count } = await inventoryValue(target);
-      if (count === 0) { client.say(channel, `@${user} ${target} has an empty inventory.`); break; }
-      client.say(channel, `@${user} ${target}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`);
+      if (count === 0) {
+        if (isSelf) { client.say(channel, `@${user} you have an empty inventory.`); }
+        else { client.say(channel, `@${user} @${target} has an empty inventory.`); }
+        break;
+      }
+      const msg = isSelf
+        ? `@${user} inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`
+        : `@${user} @${target}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`;
+      client.say(channel, msg);
       break;
     }
     case 'price': {

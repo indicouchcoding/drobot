@@ -375,6 +375,95 @@ const CASES = {
       { weapon: '★ Bayonet', name: 'Tiger Tooth' },
     ],
   },
+   // --- Gamma 2 Case (Aug 18, 2016) ---
+  'Gamma 2 Case': {
+    Blue: [
+      { weapon: 'XM1014', name: 'Slipstream' },
+      { weapon: 'UMP-45', name: 'Briefing' },
+      { weapon: 'P90', name: 'Grim' },
+      { weapon: 'Negev', name: 'Dazzle' },
+      { weapon: 'G3SG1', name: 'Ventilator' },
+      { weapon: 'Five-SeveN', name: 'Scumbria' },
+      { weapon: 'CZ75-Auto', name: 'Imprint' },
+    ],
+    Purple: [
+      { weapon: 'SG 553', name: 'Triarch' },
+      { weapon: 'SCAR-20', name: 'Powercore' },
+      { weapon: 'MAG-7', name: 'Petroglyph' },
+      { weapon: 'Glock-18', name: 'Weasel' },
+      { weapon: 'Desert Eagle', name: 'Directive' },
+    ],
+    Pink: [
+      { weapon: 'Tec-9', name: 'Fuel Injector' },
+      { weapon: 'MP9', name: 'Airlock' },
+      { weapon: 'AUG', name: 'Syd Mead' },
+    ],
+    Red: [
+      { weapon: 'AK-47', name: 'Neon Revolution' },
+      { weapon: 'FAMAS', name: 'Roll Cage' },
+    ],
+    Gold: [
+      // Bayonet (Gamma set)
+      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 1)' },
+      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 2)' },
+      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 3)' },
+      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 4)' },
+      { weapon: '★ Bayonet', name: 'Gamma Doppler (Emerald)' },
+      { weapon: '★ Bayonet', name: 'Freehand' },
+      { weapon: '★ Bayonet', name: 'Lore' },
+      { weapon: '★ Bayonet', name: 'Autotronic' },
+      { weapon: '★ Bayonet', name: 'Bright Water' },
+      { weapon: '★ Bayonet', name: 'Black Laminate' },
+
+      // Flip Knife (Gamma set)
+      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 1)' },
+      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 2)' },
+      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 3)' },
+      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 4)' },
+      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Emerald)' },
+      { weapon: '★ Flip Knife', name: 'Freehand' },
+      { weapon: '★ Flip Knife', name: 'Lore' },
+      { weapon: '★ Flip Knife', name: 'Autotronic' },
+      { weapon: '★ Flip Knife', name: 'Bright Water' },
+      { weapon: '★ Flip Knife', name: 'Black Laminate' },
+
+      // Gut Knife (Gamma set)
+      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 1)' },
+      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 2)' },
+      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 3)' },
+      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 4)' },
+      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Emerald)' },
+      { weapon: '★ Gut Knife', name: 'Freehand' },
+      { weapon: '★ Gut Knife', name: 'Lore' },
+      { weapon: '★ Gut Knife', name: 'Autotronic' },
+      { weapon: '★ Gut Knife', name: 'Bright Water' },
+      { weapon: '★ Gut Knife', name: 'Black Laminate' },
+
+      // Karambit (Gamma set)
+      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 1)' },
+      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 2)' },
+      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 3)' },
+      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 4)' },
+      { weapon: '★ Karambit', name: 'Gamma Doppler (Emerald)' },
+      { weapon: '★ Karambit', name: 'Freehand' },
+      { weapon: '★ Karambit', name: 'Lore' },
+      { weapon: '★ Karambit', name: 'Autotronic' },
+      { weapon: '★ Karambit', name: 'Bright Water' },
+      { weapon: '★ Karambit', name: 'Black Laminate' },
+
+      // M9 Bayonet (Gamma set)
+      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 1)' },
+      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 2)' },
+      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 3)' },
+      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 4)' },
+      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Emerald)' },
+      { weapon: '★ M9 Bayonet', name: 'Freehand' },
+      { weapon: '★ M9 Bayonet', name: 'Lore' },
+      { weapon: '★ M9 Bayonet', name: 'Autotronic' },
+      { weapon: '★ M9 Bayonet', name: 'Bright Water' },
+      { weapon: '★ M9 Bayonet', name: 'Black Laminate' },
+    ],
+  }, 
 };
 
 // ----------------- Persistence -----------------

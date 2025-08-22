@@ -482,7 +482,7 @@ client.say = (channel, text) => {
   return _say(channel, text);
 };
 
-client.connect().then(() => { ensureData(); console.log(`[indicouch:${INSTANCE_ID}] connected to`, process.env.TWITCH_CHANNEL); }).catch(console.error);
+client.connect().then(() => { ensureData(); console.log(`[indicouch:${INSTANCE_ID}] data dir = ${DATA_DIR}`); console.log(`[indicouch:${INSTANCE_ID}] connected to`, process.env.TWITCH_CHANNEL); }).catch(console.error);
 
 // --- Minimal HTTP health server for Render Web Service ---
 const PORT = process.env.PORT || 3000;

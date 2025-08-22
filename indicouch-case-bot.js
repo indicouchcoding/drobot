@@ -556,7 +556,7 @@ function isModOrBroadcaster(tags) { const badges = tags.badges || {}; return !!t
 const HELP_TEXT = [
   `Commands:`,
   `!cases — list cases`,
-  `!open <case> [xN|N] — open 1-100 cases`,
+  `!open <case> [xN|N] — open 1-5 cases`,
   `!inv [@user] — show inventory`,
   `!worth [@user] — inventory value (USD)`,
   `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,

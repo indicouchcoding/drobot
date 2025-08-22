@@ -855,7 +855,8 @@ async function priceLookupFlexible(input) { let out=await priceForMarketHash(inp
 
 // kick off initial price prefetch in background (non-blocking)
 (async () => { try { await PriceService._fetchSkinportItems(); } catch (e) { /* ignore */ } })();
-setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, Math.max(PRICE_CFG.ttlMs, 300000));
+const PRICE_REFRESH_MS = Math.max(parseInt(process.env.PRICE_TTL_MINUTES || '10', 10) * 60000, 300000);
+setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, PRICE_REFRESH_MS);
 
 client.on('disconnected', (reason) => console.log(`[indicouch:${INSTANCE_ID}] disconnected:`, reason));
 function gracefulExit() { console.log(`[indicouch:${INSTANCE_ID}] shutting down`); try { client.disconnect(); } catch {} process.exit(0); }

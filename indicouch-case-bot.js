@@ -426,6 +426,30 @@ function openOne(caseKey) {
 function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'🩷':rarity==='Purple'?'🟣':'🔵'; }
 function formatDrop(drop) { const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak'); const prefix=parts.length?parts.join(' ')+' ':''; const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join(''); const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:''; return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`; }
 
+// ---- Whisper helpers and rarity parsing ----
+function normalizeRarity(input) {
+  if (!input) return null;
+  const t = String(input).toLowerCase();
+  if (t === 'gold' || t === '✨' || t === 'yellow' || t === 'knife' || t === 'glove') return 'Gold';
+  if (t === 'red' || t === 'covert' || t === '🔴') return 'Red';
+  if (t === 'pink' || t === 'classified' || t === '🩷') return 'Pink';
+  if (t === 'purple' || t === 'restricted' || t === '🟣') return 'Purple';
+  if (t === 'blue' || t === 'mil-spec' || t === '🔵') return 'Blue';
+  return null;
+}
+async function whisperList(toUser, header, lines) {
+  const chunks = [];
+  let buf = header;
+  for (const ln of lines) {
+    const add = (buf.length ? ' | ' : '') + ln;
+    if ((buf + add).length > 400) { chunks.push(buf); buf = ln; } else { buf += add; }
+  }
+  if (buf) chunks.push(buf);
+  for (const c of chunks) {
+    try { await client.whisper(toUser, c); } catch (e) { console.log('[whisper error]', e?.message || e); }
+  }
+}
+
 // ----------------- Inventories & Stats -----------------
 function addToInventory(user, drop) { const inv=loadJSON(INV_PATH); (inv[user] ||= []).push(drop); saveJSON(INV_PATH, inv); }
 function getInventory(user) { const inv=loadJSON(INV_PATH); return inv[user] || []; }
@@ -448,6 +472,7 @@ const HELP_TEXT = [
   `!worth [@user] — inventory value (USD)`,
   `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,
   `!top [N] — leaderboard by inventory value`,
+  `!invlist <rarity> — whisper your items of that rarity`,
   `!stats — global drop stats`,
   `!setcase <case> — set default case`,
   `!mycase — show your default case`,
@@ -523,7 +548,7 @@ client.on('message', async (channel, tags, message, self) => {
 
   const args = message.slice(CONFIG.prefix.length).trim().split(/\s+/);
   const cmd = args.shift()?.toLowerCase();
-      const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','stats','worth','price','top','backupurl','dro','drobot']);
+      const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','invlist','stats','worth','price','top','backupurl','dro','drobot']);
       if (!ALLOWED_CMDS.has(cmd)) return; // ignore non-bot commands like !so, !uptime, etc.
 
   switch (cmd) {
@@ -610,14 +635,24 @@ client.on('message', async (channel, tags, message, self) => {
       const target = (args[0]?.replace('@','') || user).toLowerCase();
       const items = getInventory(target);
       if (items.length === 0) { client.say(channel, `@${user} ${target} has an empty inventory. Use !open to pull some heat.`); break; }
-
       // Count rarities only (no item previews)
       const counts = { Gold:0, Red:0, Pink:0, Purple:0, Blue:0 };
       for (const it of items) if (counts[it.rarity] != null) counts[it.rarity]++;
       const order = ['Gold','Red','Pink','Purple','Blue'];
       const parts = order.map(r => `${rarityEmoji(r)} ${r}: ${counts[r] || 0}`).join(' | ');
-
       client.say(channel, `@${user} ${target}'s inventory (${items.length} items) — ${parts}`);
+      break;
+    }
+    case 'invlist': {
+      const login = (tags.username || '').toLowerCase();
+      const rarityArg = (args[0] || '').toLowerCase();
+      const rarityKey = normalizeRarity(rarityArg);
+      if (!rarityKey) { client.say(channel, `@${user} usage: !invlist <gold|red|pink|purple|blue>`); break; }
+      const items = getInventory(user).filter(it => it.rarity === rarityKey);
+      if (!items.length) { client.say(channel, `@${user} no ${rarityKey} items yet.`); break; }
+      const lines = items.map(formatDrop);
+      await whisperList(login, `[${rarityEmoji(rarityKey)} ${rarityKey}] ${items.length} item(s):`, lines);
+      client.say(channel, `@${user} whispered your ${rarityKey} items.`);
       break;
     }
     case 'stats': {

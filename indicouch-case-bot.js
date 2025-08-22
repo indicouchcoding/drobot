@@ -578,8 +578,23 @@ client.on('message', async (channel, tags, message, self) => {
       const target = (args[0]?.replace('@','') || user).toLowerCase();
       const items = getInventory(target);
       if (items.length === 0) { client.say(channel, `@${user} ${target} has an empty inventory. Use !open to pull some heat.`); break; }
-      const preview = items.slice(-5).map(formatDrop).join('  |  ');
-      client.say(channel, `@${user} ${target}'s last ${Math.min(5, items.length)} drops: ${preview}  (Total: ${items.length})`);
+
+      // Build rarity counts + short previews per rarity (latest 2 items each)
+      const order = ['Gold','Red','Pink','Purple','Blue'];
+      const counts = { Gold:0, Red:0, Pink:0, Purple:0, Blue:0 };
+      for (const it of items) { if (counts[it.rarity] != null) counts[it.rarity]++; }
+
+      const groups = [];
+      for (const r of order) {
+        const c = counts[r] || 0;
+        if (!c) continue;
+        const recent = items.filter(it => it.rarity === r).slice(-2).map(formatDrop).join(' | ');
+        const em = rarityEmoji(r);
+        groups.push(`${em} ${r} x${c}${recent ? `: ${recent}` : ''}`);
+      }
+
+      const line = groups.join('  ||  ');
+      client.say(channel, `@${user} ${target}'s inventory (${items.length} items) — ${line}`);
       break;
     }
     case 'stats': {

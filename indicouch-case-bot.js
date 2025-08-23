@@ -600,6 +600,24 @@ function formatDrop(drop) {
 function chanName(channel) { return String(channel).replace(/^#/, '').toLowerCase(); }
 function nsKey(channel, username) { return `${chanName(channel)}:${String(username).toLowerCase()}`; }
 function mergeArrays(a, b) { return [].concat(a || [], b || []); }
+}
+// ---- Sort helper: rarest + priciest first ----
+const RARITY_ORDER = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
+function sortDropsByHype(a, b) {
+  const rdiff = (RARITY_ORDER[b.rarity] || 0) - (RARITY_ORDER[a.rarity] || 0);
+  if (rdiff) return rdiff;
+
+  // price (unknown = -1 so known prices float up)
+  const pa = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
+  const pb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
+  if (pb !== pa) return pb - pa;
+
+  // StatTrak first if same rarity/price
+  if (a.stattrak !== b.stattrak) return b.stattrak ? 1 : -1;
+
+  // Tiebreak: lower float first
+  return (a.float ?? 1) - (b.float ?? 1);
+}
 
 // ----------------- Inventories & Stats (with migration) -----------------
 function getInventory(userKey) {
@@ -1021,23 +1039,38 @@ client.on('message', async (channel, tags, message, self) => {
         pushStats(drop);
       }
       try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
+// Sort results for display: rarest + most valuable first
+const sorted = results.slice().sort(sortDropsByHype);
 
-      if (count <= 5) {
-        const lines = results.map(formatDrop).join('  |  ');
-        client.say(channel, `@${display} opened ${count}x ${caseKey}: ${lines}`);
-      } else {
-        const head = results.slice(0, 5).map(formatDrop).join('  |  ');
-        const tail = results.slice(5);
-        let tailValue = 0; for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
-        const reds = tail.filter(d => d.rarity === 'Red').length;
-        const golds = tail.filter(d => d.rarity === 'Gold').length;
-        const lowFloat = tail.filter(d => d.float <= 0.05).length; // super low floats
-        const highlights = [golds?`✨x${golds}`:null, reds?`🔴x${reds}`:null, lowFloat?`⬇️x${lowFloat}`:null].filter(Boolean).join(' ');
-        const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
-        const hl = highlights ? ` Highlights: ${highlights}` : '';
-        client.say(channel, `@${display} opened ${count}x ${caseKey}: ${head}  |  ${more}.${hl}`);
-      }
-      break;
+if (count <= 5) {
+  const lines = sorted.map(formatDrop).join('  |  ');
+  client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
+  break;
+}
+
+// Beyond 5: show first 5 sorted, then summarize the rest
+const head = sorted.slice(0, 5).map(formatDrop).join('  |  ');
+const tail = sorted.slice(5);
+
+let tailValue = 0;
+for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
+
+const reds = tail.filter(d => d.rarity === 'Red').length;
+const golds = tail.filter(d => d.rarity === 'Gold').length;
+const lowFloat = tail.filter(d => d.float <= 0.05).length; // highlight super low floats
+
+const highlights = [
+  golds ? `✨x${golds}` : null,
+  reds ? `🔴x${reds}` : null,
+  lowFloat ? `⬇️x${lowFloat}` : null,
+].filter(Boolean).join(' ');
+
+const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
+const hl = highlights ? ` Highlights: ${highlights}` : '';
+
+client.say(channel, `@${user} opened ${count}x ${caseKey}: ${head}  |  ${more}.${hl}`);
+break;
+
     }
 
     case 'inv': {

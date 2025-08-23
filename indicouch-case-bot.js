@@ -1,21 +1,28 @@
 /*
-Indicouch Case-Opening Chatbot — Twitch (tmi.js)
+Dro_bot_ — CS2 Case-Opening Chatbot (tmi.js)
 Author: you + GPT-5 Thinking
 License: MIT
 
-STREAM-READY • One-instance (no repeat replies) • Pricing • More Cases • Glove-safe
+STREAM-READY • One-instance (no repeat replies) • Pricing • Multi-channel
 - Robust anti-duplicate replies (even when Twitch omits message IDs)
 - CS2-style odds + wear
 - Pricing via Skinport + optional CSFloat (with fuzzy !price + !price last)
 - Cases: CS:GO Weapon Case, Operation Breakout Weapon Case, Fever Case,
-         Prisma 2, Dreams & Nightmares, Fracture, Gamma 2, eSports 2013 Winter,
-         Glove Case (rare special = gloves; no StatTrak™ / Souvenir)
+         Prisma 2, Dreams & Nightmares, Fracture
 - Minimal HTTP server for Render health/backup
-- Friendly aliases so chat can type short names (e.g., !open glove)
+- NEW: Multi-channel support via TWITCH_CHANNELS (per-channel inventories/leaderboards)
 
 Quick start
 1) npm init -y && npm i tmi.js dotenv
-2) .env → TWITCH_USERNAME, TWITCH_OAUTH, TWITCH_CHANNEL, BOT_PREFIX=!, PRICE_PROVIDER=best_of, PRICE_CURRENCY=USD, CSFLOAT_API_KEY=(optional)
+2) .env →
+   TWITCH_USERNAME=bot_username
+   TWITCH_OAUTH=oauth:xxxxxxxxxxxxxxxx
+   TWITCH_CHANNELS=channelA, channelB   # join multiple (or use TWITCH_CHANNEL for single)
+   BOT_PREFIX=!
+   PRICE_PROVIDER=best_of
+   PRICE_CURRENCY=USD
+   CSFLOAT_API_KEY=    # optional
+   DATA_DIR=/var/data/indicouch           # if using a persistent disk
 3) node indicouch-case-bot.js
 --------------------------------------------------------------------------------
 */
@@ -29,6 +36,13 @@ dotenv.config();
 
 // Instance tag helps detect duplicate processes in logs
 const INSTANCE_ID = Math.random().toString(36).slice(2, 8);
+
+// Multi-channel support: TWITCH_CHANNELS="chanA, chanB  chanC"
+// Falls back to TWITCH_CHANNEL if TWITCH_CHANNELS is empty
+const CHANNELS = (process.env.TWITCH_CHANNELS || process.env.TWITCH_CHANNEL || '')
+  .split(/[,\s]+/)
+  .map(s => s.replace(/^#/, '').trim().toLowerCase())
+  .filter(Boolean);
 
 // Robust de-dupe: prefer Twitch message id; fallback to fingerprint(user+room+message)
 const SEEN_IDS = new Set();
@@ -65,7 +79,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || null; // e.g., https://your-service
 const CONFIG = {
   prefix: process.env.BOT_PREFIX || '!',
   defaultCaseKey: 'Prisma 2 Case',
-  maxOpensPerCommand: 5, // cap = 5
+  maxOpensPerCommand: 100, // you can change to 10 if you want a smaller cap
   stattrakChance: 0.10, // 10%
   souvenirChance: 0.00, // 0% (regular cases don't drop Souvenirs; leave 0)
   wearTiers: [
@@ -84,24 +98,6 @@ const CONFIG = {
     { key: 'Purple', color: 'Restricted', p: 0.1598 },
     { key: 'Blue', color: 'Mil-Spec', p: 0.7992 },
   ],
-};
-
-// ----------------- Case Aliases (friendly names) -----------------
-const CASE_ALIASES = {
-  // Glove Case
-  'glove': 'Glove Case',
-  'gloves': 'Glove Case',
-  'glovecase': 'Glove Case',
-  'glove case': 'Glove Case',
-
-  // Gamma 2
-  'gamma 2': 'Gamma 2 Case',
-  'gamma2': 'Gamma 2 Case',
-
-  // eSports 2013 Winter
-  'esports 2013 winter': 'eSports 2013 Winter Case',
-  'esports winter': 'eSports 2013 Winter Case',
-  'winter esports': 'eSports 2013 Winter Case',
 };
 
 // ----------------- Case + Skin Data -----------------
@@ -395,249 +391,6 @@ const CASES = {
       { weapon: '★ Bayonet', name: 'Tiger Tooth' },
     ],
   },
-
-  // Added earlier: Gamma 2 Case
-  'Gamma 2 Case': {
-    Blue: [
-      { weapon: 'XM1014', name: 'Slipstream' },
-      { weapon: 'UMP-45', name: 'Briefing' },
-      { weapon: 'P90', name: 'Grim' },
-      { weapon: 'Negev', name: 'Dazzle' },
-      { weapon: 'G3SG1', name: 'Ventilator' },
-      { weapon: 'Five-SeveN', name: 'Scumbria' },
-      { weapon: 'CZ75-Auto', name: 'Imprint' },
-    ],
-    Purple: [
-      { weapon: 'SG 553', name: 'Triarch' },
-      { weapon: 'SCAR-20', name: 'Powercore' },
-      { weapon: 'MAG-7', name: 'Petroglyph' },
-      { weapon: 'Glock-18', name: 'Weasel' },
-      { weapon: 'Desert Eagle', name: 'Directive' },
-    ],
-    Pink: [
-      { weapon: 'Tec-9', name: 'Fuel Injector' },
-      { weapon: 'MP9', name: 'Airlock' },
-      { weapon: 'AUG', name: 'Syd Mead' },
-    ],
-    Red: [
-      { weapon: 'AK-47', name: 'Neon Revolution' },
-      { weapon: 'FAMAS', name: 'Roll Cage' },
-    ],
-    Gold: [
-      // Bayonet (Gamma set)
-      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 1)' },
-      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 2)' },
-      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 3)' },
-      { weapon: '★ Bayonet', name: 'Gamma Doppler (Phase 4)' },
-      { weapon: '★ Bayonet', name: 'Gamma Doppler (Emerald)' },
-      { weapon: '★ Bayonet', name: 'Freehand' },
-      { weapon: '★ Bayonet', name: 'Lore' },
-      { weapon: '★ Bayonet', name: 'Autotronic' },
-      { weapon: '★ Bayonet', name: 'Bright Water' },
-      { weapon: '★ Bayonet', name: 'Black Laminate' },
-
-      // Flip Knife (Gamma set)
-      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 1)' },
-      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 2)' },
-      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 3)' },
-      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Phase 4)' },
-      { weapon: '★ Flip Knife', name: 'Gamma Doppler (Emerald)' },
-      { weapon: '★ Flip Knife', name: 'Freehand' },
-      { weapon: '★ Flip Knife', name: 'Lore' },
-      { weapon: '★ Flip Knife', name: 'Autotronic' },
-      { weapon: '★ Flip Knife', name: 'Bright Water' },
-      { weapon: '★ Flip Knife', name: 'Black Laminate' },
-
-      // Gut Knife (Gamma set)
-      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 1)' },
-      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 2)' },
-      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 3)' },
-      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Phase 4)' },
-      { weapon: '★ Gut Knife', name: 'Gamma Doppler (Emerald)' },
-      { weapon: '★ Gut Knife', name: 'Freehand' },
-      { weapon: '★ Gut Knife', name: 'Lore' },
-      { weapon: '★ Gut Knife', name: 'Autotronic' },
-      { weapon: '★ Gut Knife', name: 'Bright Water' },
-      { weapon: '★ Gut Knife', name: 'Black Laminate' },
-
-      // Karambit (Gamma set)
-      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 1)' },
-      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 2)' },
-      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 3)' },
-      { weapon: '★ Karambit', name: 'Gamma Doppler (Phase 4)' },
-      { weapon: '★ Karambit', name: 'Gamma Doppler (Emerald)' },
-      { weapon: '★ Karambit', name: 'Freehand' },
-      { weapon: '★ Karambit', name: 'Lore' },
-      { weapon: '★ Karambit', name: 'Autotronic' },
-      { weapon: '★ Karambit', name: 'Bright Water' },
-      { weapon: '★ Karambit', name: 'Black Laminate' },
-
-      // M9 Bayonet (Gamma set)
-      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 1)' },
-      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 2)' },
-      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 3)' },
-      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Phase 4)' },
-      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler (Emerald)' },
-      { weapon: '★ M9 Bayonet', name: 'Freehand' },
-      { weapon: '★ M9 Bayonet', name: 'Lore' },
-      { weapon: '★ M9 Bayonet', name: 'Autotronic' },
-      { weapon: '★ M9 Bayonet', name: 'Bright Water' },
-      { weapon: '★ M9 Bayonet', name: 'Black Laminate' },
-    ],
-  },
-
-  // Added earlier: eSports 2013 Winter Case (Arms Deal knife set on Gold)
-  'eSports 2013 Winter Case': {
-    Blue: [
-      { weapon: 'Galil AR',   name: 'Blue Titanium' },
-      { weapon: 'G3SG1',      name: 'Azure Zebra' },
-      { weapon: 'Five-SeveN', name: 'Nightshade' },
-      { weapon: 'P250',       name: 'Steel Disruption' },
-      { weapon: 'Nova',       name: 'Ghost Camo' },
-      { weapon: 'PP-Bizon',   name: 'Water Sigil' },
-    ],
-    Purple: [
-      { weapon: 'AK-47', name: 'Blue Laminate' },
-      { weapon: 'P90',   name: 'Blind Spot' },
-    ],
-    Pink: [
-      { weapon: 'Desert Eagle', name: 'Cobalt Disruption' },
-      { weapon: 'FAMAS',        name: 'Afterimage' },
-      { weapon: 'AWP',          name: 'Electric Hive' },
-    ],
-    Red: [
-      { weapon: 'M4A4', name: 'X-Ray' },
-    ],
-    Gold: [
-      // Arms Deal knife set (rare special)
-      // Bayonet
-      { weapon: '★ Bayonet', name: 'Fade' },
-      { weapon: '★ Bayonet', name: 'Case Hardened' },
-      { weapon: '★ Bayonet', name: 'Crimson Web' },
-      { weapon: '★ Bayonet', name: 'Slaughter' },
-      { weapon: '★ Bayonet', name: 'Night' },
-      { weapon: '★ Bayonet', name: 'Blue Steel' },
-      { weapon: '★ Bayonet', name: 'Boreal Forest' },
-      { weapon: '★ Bayonet', name: 'Stained' },
-      { weapon: '★ Bayonet', name: 'Safari Mesh' },
-      { weapon: '★ Bayonet', name: 'Scorched' },
-      { weapon: '★ Bayonet', name: 'Urban Masked' },
-      // Flip
-      { weapon: '★ Flip Knife', name: 'Fade' },
-      { weapon: '★ Flip Knife', name: 'Case Hardened' },
-      { weapon: '★ Flip Knife', name: 'Crimson Web' },
-      { weapon: '★ Flip Knife', name: 'Slaughter' },
-      { weapon: '★ Flip Knife', name: 'Night' },
-      { weapon: '★ Flip Knife', name: 'Blue Steel' },
-      { weapon: '★ Flip Knife', name: 'Boreal Forest' },
-      { weapon: '★ Flip Knife', name: 'Stained' },
-      { weapon: '★ Flip Knife', name: 'Safari Mesh' },
-      { weapon: '★ Flip Knife', name: 'Scorched' },
-      { weapon: '★ Flip Knife', name: 'Urban Masked' },
-      // Gut
-      { weapon: '★ Gut Knife', name: 'Fade' },
-      { weapon: '★ Gut Knife', name: 'Case Hardened' },
-      { weapon: '★ Gut Knife', name: 'Crimson Web' },
-      { weapon: '★ Gut Knife', name: 'Slaughter' },
-      { weapon: '★ Gut Knife', name: 'Night' },
-      { weapon: '★ Gut Knife', name: 'Blue Steel' },
-      { weapon: '★ Gut Knife', name: 'Boreal Forest' },
-      { weapon: '★ Gut Knife', name: 'Stained' },
-      { weapon: '★ Gut Knife', name: 'Safari Mesh' },
-      { weapon: '★ Gut Knife', name: 'Scorched' },
-      { weapon: '★ Gut Knife', name: 'Urban Masked' },
-      // Karambit
-      { weapon: '★ Karambit', name: 'Fade' },
-      { weapon: '★ Karambit', name: 'Case Hardened' },
-      { weapon: '★ Karambit', name: 'Crimson Web' },
-      { weapon: '★ Karambit', name: 'Slaughter' },
-      { weapon: '★ Karambit', name: 'Night' },
-      { weapon: '★ Karambit', name: 'Blue Steel' },
-      { weapon: '★ Karambit', name: 'Boreal Forest' },
-      { weapon: '★ Karambit', name: 'Stained' },
-      { weapon: '★ Karambit', name: 'Safari Mesh' },
-      { weapon: '★ Karambit', name: 'Scorched' },
-      { weapon: '★ Karambit', name: 'Urban Masked' },
-      // M9 Bayonet
-      { weapon: '★ M9 Bayonet', name: 'Fade' },
-      { weapon: '★ M9 Bayonet', name: 'Case Hardened' },
-      { weapon: '★ M9 Bayonet', name: 'Crimson Web' },
-      { weapon: '★ M9 Bayonet', name: 'Slaughter' },
-      { weapon: '★ M9 Bayonet', name: 'Night' },
-      { weapon: '★ M9 Bayonet', name: 'Blue Steel' },
-      { weapon: '★ M9 Bayonet', name: 'Boreal Forest' },
-      { weapon: '★ M9 Bayonet', name: 'Stained' },
-      { weapon: '★ M9 Bayonet', name: 'Safari Mesh' },
-      { weapon: '★ M9 Bayonet', name: 'Scorched' },
-      { weapon: '★ M9 Bayonet', name: 'Urban Masked' },
-    ],
-  },
-
-  // New: Glove Case (rare special = gloves)
-  'Glove Case': {
-    Blue: [
-      { weapon: 'Glock-18',    name: 'Ironwork' },
-      { weapon: 'CZ75-Auto',   name: 'Polymer' },
-      { weapon: 'P2000',       name: 'Turf' },
-      { weapon: 'MP7',         name: 'Cirrus' },
-      { weapon: 'MP9',         name: 'Sand Scale' },
-      { weapon: 'MAG-7',       name: 'Sonar' },
-      { weapon: 'Galil AR',    name: 'Black Sand' },
-    ],
-    Purple: [
-      { weapon: 'USP-S',         name: 'Cyrex' },
-      { weapon: 'M4A1-S',        name: 'Flashback' },
-      { weapon: 'Dual Berettas', name: 'Royal Consorts' },
-      { weapon: 'G3SG1',         name: 'Stinger' },
-      { weapon: 'Nova',          name: 'Gila' },
-    ],
-    Pink: [
-      { weapon: 'FAMAS',      name: 'Mecha Industries' },
-      { weapon: 'P90',        name: 'Shallow Grave' },
-      { weapon: 'Sawed-Off',  name: 'Wasteland Princess' },
-    ],
-    Red: [
-      { weapon: 'M4A4',   name: 'Buzz Kill' },
-      { weapon: 'SSG 08', name: 'Dragonfire' },
-    ],
-    Gold: [
-      // Bloodhound Gloves
-      { weapon: '★ Bloodhound Gloves', name: 'Snakebite' },
-      { weapon: '★ Bloodhound Gloves', name: 'Bronzed' },
-      { weapon: '★ Bloodhound Gloves', name: 'Guerrilla' },
-      { weapon: '★ Bloodhound Gloves', name: 'Charred' },
-
-      // Driver Gloves
-      { weapon: '★ Driver Gloves', name: 'Crimson Weave' },
-      { weapon: '★ Driver Gloves', name: 'Lunar Weave' },
-      { weapon: '★ Driver Gloves', name: 'Diamondback' },
-      { weapon: '★ Driver Gloves', name: 'Convoy' },
-
-      // Hand Wraps
-      { weapon: '★ Hand Wraps', name: 'Slaughter' },
-      { weapon: '★ Hand Wraps', name: 'Badlands' },
-      { weapon: '★ Hand Wraps', name: 'Spruce DDPAT' },
-      { weapon: '★ Hand Wraps', name: 'Leather' },
-
-      // Moto Gloves
-      { weapon: '★ Moto Gloves', name: 'Spearmint' },
-      { weapon: '★ Moto Gloves', name: 'Cool Mint' },
-      { weapon: '★ Moto Gloves', name: 'Boom!' },
-      { weapon: '★ Moto Gloves', name: 'Eclipse' },
-
-      // Specialist Gloves
-      { weapon: '★ Specialist Gloves', name: 'Crimson Kimono' },
-      { weapon: '★ Specialist Gloves', name: 'Emerald Web' },
-      { weapon: '★ Specialist Gloves', name: 'Foundation' },
-      { weapon: '★ Specialist Gloves', name: 'Forest DDPAT' },
-
-      // Sport Gloves
-      { weapon: '★ Sport Gloves', name: "Pandora's Box" },
-      { weapon: '★ Sport Gloves', name: 'Arid' },
-      { weapon: '★ Sport Gloves', name: 'Superconductor' },
-      { weapon: '★ Sport Gloves', name: 'Hedge Maze' },
-    ],
-  },
 };
 
 // ----------------- Persistence -----------------
@@ -658,7 +411,9 @@ function saveJSON(p, obj) { fs.writeFileSync(p, JSON.stringify(obj, null, 2)); }
 
 // ----------------- RNG Helpers -----------------
 function rng() { return Math.random(); }
-function weightedPick(items, weightProp = 'p') { const r = rng(); let acc = 0; for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; } return items[items.length - 1]; }
+function weightedPick(items, weightProp = 'p') {
+  const r = rng(); let acc = 0; for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; } return items[items.length - 1];
+}
 function pickWear() { const wear = weightedPick(CONFIG.wearTiers); const [min, max] = wear.float; const fl = +(min + rng() * (max - min)).toFixed(4); return { ...wear, float: fl }; }
 function pickRarity() { const rarityPool = [...CONFIG.rarities].reverse(); return weightedPick(rarityPool); }
 function pickSkin(caseKey, rarityKey) { const pool = CASES[caseKey]?.[rarityKey] || []; if (!pool.length) return null; return pool[Math.floor(rng() * pool.length)]; }
@@ -671,7 +426,7 @@ function openOne(caseKey) {
   const skin = pickSkin(caseKey, rarityKey);
   const wear = pickWear();
   const { stattrak, souvenir } = rollModifiers();
-  const drop = {
+  return {
     case: caseKey,
     rarity: rarityKey,
     wear: wear.key,
@@ -681,38 +436,11 @@ function openOne(caseKey) {
     weapon: skin?.weapon || 'Unknown',
     name: skin?.name || 'Mystery',
   };
-
-  // Gloves don’t have StatTrak or Souvenir → force off
-  if ((drop.weapon || '').toLowerCase().includes('glove') || /hand wraps/i.test(drop.weapon || '')) {
-    drop.stattrak = false;
-    drop.souvenir = false;
-  }
-  return drop;
 }
 
 // ----------------- Formatting -----------------
 function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'🩷':rarity==='Purple'?'🟣':'🔵'; }
-function formatDrop(drop) {
-  const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak');
-  const prefix=parts.length?parts.join(' ')+' ':'';
-  const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join('');
-  const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:'';
-  return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`;
-}
-
-// --- Sort helper: higher tiers first, then higher $ value, then lower float ---
-const RARITY_RANK = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
-function sortByTierThenValue(a, b) {
-  const ra = RARITY_RANK[a.rarity] || 0;
-  const rb = RARITY_RANK[b.rarity] || 0;
-  if (ra !== rb) return rb - ra; // higher tier first
-  const va = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
-  const vb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
-  if (va !== vb) return vb - va; // higher $ first
-  const fa = (typeof a.float === 'number') ? a.float : 1;
-  const fb = (typeof b.float === 'number') ? b.float : 1;
-  return fa - fb; // lower float first
-}
+function formatDrop(drop) { const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak'); const prefix=parts.length?parts.join(' ')+' ':''; const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join(''); const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:''; return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`; }
 
 // ---- Rarity parsing + chunked chat sender ----
 function normalizeRarity(input) {
@@ -739,23 +467,36 @@ async function sayChunkedList(channel, header, lines) {
 }
 
 // ----------------- Inventories & Stats -----------------
-function addToInventory(user, drop) { const inv=loadJSON(INV_PATH); (inv[user] ||= []).push(drop); saveJSON(INV_PATH, inv); }
-function getInventory(user) { const inv=loadJSON(INV_PATH); return inv[user] || []; }
+function addToInventory(userKey, drop) { const inv=loadJSON(INV_PATH); (inv[userKey] ||= []).push(drop); saveJSON(INV_PATH, inv); }
+function getInventory(userKey) { const inv=loadJSON(INV_PATH); return inv[userKey] || []; }
 function pushStats(drop) { const stats=loadJSON(STATS_PATH); stats.opens=(stats.opens||0)+1; stats.drops=stats.drops||{}; stats.drops[drop.rarity]=(stats.drops[drop.rarity]||0)+1; saveJSON(STATS_PATH, stats); }
 function getStats() { const stats=loadJSON(STATS_PATH); const total=stats.opens||0; const by=stats.drops||{}; const fmt=['Gold','Red','Pink','Purple','Blue'].map(r=>`${rarityEmoji(r)} ${r}: ${by[r]||0}`).join(' | '); return { total, fmt }; }
 
 // ----------------- Value & Leaderboard -----------------
 async function ensurePriceOnDrop(drop) { if (typeof drop.priceUSD === 'number') return drop.priceUSD; try { const p=await PriceService.priceForDrop(drop); if (p && typeof p.usd==='number') { drop.priceUSD=p.usd; return drop.priceUSD; } } catch {} return null; }
-async function inventoryValue(user) { const items=getInventory(user); let sum=0; for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } return { totalUSD:+sum.toFixed(2), count: items.length }; }
+async function inventoryValue(userKey) { const items=getInventory(userKey); let sum=0; for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } return { totalUSD:+sum.toFixed(2), count: items.length }; }
 function getAllInventories() { return loadJSON(INV_PATH) || {}; }
-async function leaderboardTop(n=5) { const inv=getAllInventories(); const rows=[]; for (const [user, items] of Object.entries(inv)) { let sum=0; for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } rows.push({ user, total:+sum.toFixed(2), count: items.length }); } rows.sort((a,b)=>b.total-a.total); return rows.slice(0, Math.max(1, Math.min(25, n))); }
+async function leaderboardTop(n=5, chan) {
+  const inv=getAllInventories();
+  const rows=[];
+  const prefix = `${chan}:`;
+  for (const [key, items] of Object.entries(inv)) {
+    if (!key.startsWith(prefix)) continue;
+    let sum=0;
+    for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; }
+    const user = key.slice(prefix.length);
+    rows.push({ user, total:+sum.toFixed(2), count: items.length });
+  }
+  rows.sort((a,b)=>b.total-a.total);
+  return rows.slice(0, Math.max(1, Math.min(25, n)));
+}
 
 // ----------------- Command Router -----------------
 function isModOrBroadcaster(tags) { const badges = tags.badges || {}; return !!tags.mod || badges.broadcaster === '1'; }
 const HELP_TEXT = [
   `Commands:`,
   `!cases — list cases`,
-  `!open <case> [xN|N] — open 1-5 cases`,
+  `!open <case> [xN|N] — open 1-100 cases`,
   `!inv [@user] — show inventory`,
   `!worth [@user] — inventory value (USD)`,
   `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,
@@ -764,43 +505,31 @@ const HELP_TEXT = [
   `!stats — global drop stats`,
   `!setcase <case> — set default case`,
   `!mycase — show your default case`,
-  `!dro / !drobot — quick intro`,
+  `!dro / !drobot — intro blurb`,
   `!help — this menu`,
 ].join(' | ');
 
-function setDefaultCase(user, caseKey) { const d=loadJSON(DEFAULTS_PATH); d[user]=caseKey; saveJSON(DEFAULTS_PATH, d); }
-function getDefaultCase(user) { const d=loadJSON(DEFAULTS_PATH); return d[user] || CONFIG.defaultCaseKey; }
-function resolveCaseKey(input) {
-  if (!input) return null;
-  const raw = String(input).trim().toLowerCase();
+function setDefaultCase(userKey, caseKey) { const d=loadJSON(DEFAULTS_PATH); d[userKey]=caseKey; saveJSON(DEFAULTS_PATH, d); }
+function getDefaultCase(userKey) { const d=loadJSON(DEFAULTS_PATH); return d[userKey] || CONFIG.defaultCaseKey; }
+function resolveCaseKey(input) { if (!input) return null; const key=Object.keys(CASES).find(c=>c.toLowerCase()===input.toLowerCase()); if (key) return key; const hit=Object.keys(CASES).find(c=>c.toLowerCase().startsWith(input.toLowerCase())); return hit || null; }
 
-  // 1) alias direct hit
-  if (CASE_ALIASES[raw]) return CASE_ALIASES[raw];
-
-  // 2) exact name match
-  const exact = Object.keys(CASES).find(c => c.toLowerCase() === raw);
-  if (exact) return exact;
-
-  // 3) startsWith fuzzy
-  const starts = Object.keys(CASES).find(c => c.toLowerCase().startsWith(raw));
-  if (starts) return starts;
-
-  // 4) contains fuzzy
-  const contains = Object.keys(CASES).find(c => c.toLowerCase().includes(raw));
-  return contains || null;
-}
-
-// Cooldowns (simple per-user)
+// Cooldowns (simple per-user across all channels)
 const cdMap = new Map();
 const COOLDOWN_MS = 3000;
-function onCooldown(user) { const now=Date.now(); const last=cdMap.get(user) || 0; if (now - last < COOLDOWN_MS) return true; cdMap.set(user, now); return false; }
+function onCooldown(userScopedKey) {
+  const now=Date.now();
+  const last=cdMap.get(userScopedKey) || 0;
+  if (now - last < COOLDOWN_MS) return true;
+  cdMap.set(userScopedKey, now);
+  return false;
+}
 
 // ----------------- Twitch Client -----------------
 const client = new tmi.Client({
   options: { skipUpdatingEmotesets: true },
   connection: { secure: true, reconnect: true },
   identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
-  channels: [process.env.TWITCH_CHANNEL],
+  channels: CHANNELS.length ? CHANNELS : [], // join all listed channels
 });
 
 // Safety net: drop identical chat lines emitted back-to-back within 1.5s per channel
@@ -817,7 +546,7 @@ client.say = (channel, text) => {
 client.connect().then(() => {
   ensureData();
   console.log(`[indicouch:${INSTANCE_ID}] data dir = ${DATA_DIR}`);
-  console.log(`[indicouch:${INSTANCE_ID}] connected to`, process.env.TWITCH_CHANNEL);
+  console.log(`[indicouch:${INSTANCE_ID}] connected; channels=`, CHANNELS);
 }).catch(console.error);
 
 // --- Minimal HTTP health server for Render Web Service ---
@@ -843,7 +572,7 @@ http.createServer((req, res) => {
     }
 
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Indicouch Case Bot OK');
+    res.end('Dro_bot_ OK');
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'text/plain' });
     res.end('server error');
@@ -854,15 +583,18 @@ client.on('message', async (channel, tags, message, self) => {
   if (self) return;
   if (alreadyHandled(tags, message)) return; // robust local de-dupe
   const user = (tags['display-name'] || tags.username || 'user').toLowerCase();
-  if (!message.startsWith(CONFIG.prefix)) return;
-  if (onCooldown(user)) return; // silent CD
+  const chan = channel.replace(/^#/, '').toLowerCase(); // per-channel scoping
+  const userKey = `${chan}:${user}`;
 
+  if (!message.startsWith(CONFIG.prefix)) return;
+
+  // Only react to whitelisted commands to avoid clashing with other bots
   const args = message.slice(CONFIG.prefix.length).trim().split(/\s+/);
   const cmd = args.shift()?.toLowerCase();
-
-  // only respond to our bot commands (ignore !so, !uptime, etc.)
   const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','invlist','stats','worth','price','top','backupurl','dro','drobot']);
   if (!ALLOWED_CMDS.has(cmd)) return;
+
+  if (onCooldown(`${chan}:${user}`)) return; // silent CD
 
   switch (cmd) {
     case 'dro':
@@ -878,14 +610,14 @@ client.on('message', async (channel, tags, message, self) => {
       client.say(channel, `Available cases: ${Object.keys(CASES).join(' | ')}`);
       break;
     case 'mycase': {
-      client.say(channel, `@${user} your default case is: ${getDefaultCase(user)}`);
+      client.say(channel, `@${user} your default case is: ${getDefaultCase(userKey)}`);
       break;
     }
     case 'setcase': {
       const input = args.join(' ');
       const key = resolveCaseKey(input);
       if (!key) { client.say(channel, `@${user} I don't recognize that case.`); break; }
-      setDefaultCase(user, key);
+      setDefaultCase(userKey, key);
       client.say(channel, `@${user} default case set to: ${key}`);
       break;
     }
@@ -903,41 +635,39 @@ client.on('message', async (channel, tags, message, self) => {
         args.splice(qtyIdx, 1);
       }
       const caseInput = args.join(' ');
-      const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(user);
+      const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(userKey);
       if (!caseKey) { client.say(channel, `@${user} pick a case with !cases or set one with !setcase <case>.`); break; }
 
       const results = [];
       for (let i = 0; i < count; i++) {
         const drop = openOne(caseKey);
         results.push(drop);
-        addToInventory(user, drop);
+        addToInventory(userKey, drop);
         pushStats(drop);
       }
+
       try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
 
-      // sort by rarity/price/float for display
-      const sorted = [...results].sort(sortByTierThenValue);
-
       if (count <= 5) {
-        const lines = sorted.map(formatDrop).join('  |  ');
+        const lines = results.map(formatDrop).join('  |  ');
         client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
         break;
       }
 
-      // Beyond 5: show top 5 by rarity/price, then summarize the rest
-      const head = sorted.slice(0, 5).map(formatDrop).join('  |  ');
-      const tail = sorted.slice(5);
+      // Beyond 5: show first 5 items, then summarize the rest by value + highlights
+      const head = results.slice(0, 5).map(formatDrop).join('  |  ');
+      const tail = results.slice(5);
 
       let tailValue = 0;
       for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
 
-      const reds  = tail.filter(d => d.rarity === 'Red').length;
+      const reds = tail.filter(d => d.rarity === 'Red').length;
       const golds = tail.filter(d => d.rarity === 'Gold').length;
-      const lowFloat = tail.filter(d => d.float <= 0.05).length;
+      const lowFloat = tail.filter(d => d.float <= 0.05).length; // highlight super low floats
 
       const highlights = [
         golds ? `✨x${golds}` : null,
-        reds  ? `🔴x${reds}` : null,
+        reds ? `🔴x${reds}` : null,
         lowFloat ? `⬇️x${lowFloat}` : null,
       ].filter(Boolean).join(' ');
 
@@ -949,7 +679,8 @@ client.on('message', async (channel, tags, message, self) => {
     }
     case 'inv': {
       const target = (args[0]?.replace('@','') || user).toLowerCase();
-      const items = getInventory(target);
+      const targetKey = `${chan}:${target}`;
+      const items = getInventory(targetKey);
       if (items.length === 0) { client.say(channel, `@${user} ${target} has an empty inventory. Use !open to pull some heat.`); break; }
       // Count rarities only (no item previews)
       const counts = { Gold:0, Red:0, Pink:0, Purple:0, Blue:0 };
@@ -969,7 +700,8 @@ client.on('message', async (channel, tags, message, self) => {
         const maybe = args[1].replace('@','').toLowerCase();
         if (isModOrBroadcaster(tags)) targetUser = maybe; else { client.say(channel, `@${user} mods/broadcaster only to target another user.`); break; }
       }
-      const items = getInventory(targetUser).filter(it => it.rarity === rarityKey);
+      const targetKey = `${chan}:${targetUser}`;
+      const items = getInventory(targetKey).filter(it => it.rarity === rarityKey);
       if (!items.length) { client.say(channel, `@${user} ${targetUser} has no ${rarityKey} items yet.`); break; }
       const basic = (d) => {
         const parts = [];
@@ -992,16 +724,16 @@ client.on('message', async (channel, tags, message, self) => {
     case 'worth': {
       const rawTarget = (args[0]?.replace('@','') || user).toLowerCase();
       const isSelf = rawTarget === user;
-      const target = rawTarget;
-      const { totalUSD, count } = await inventoryValue(target);
+      const targetKey = `${chan}:${rawTarget}`;
+      const { totalUSD, count } = await inventoryValue(targetKey);
       if (count === 0) {
         if (isSelf) { client.say(channel, `@${user} you have an empty inventory.`); }
-        else { client.say(channel, `@${user} @${target} has an empty inventory.`); }
+        else { client.say(channel, `@${user} @${rawTarget} has an empty inventory.`); }
         break;
       }
       const msg = isSelf
         ? `@${user} inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`
-        : `@${user} @${target}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`;
+        : `@${user} @${rawTarget}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`;
       client.say(channel, msg);
       break;
     }
@@ -1009,7 +741,7 @@ client.on('message', async (channel, tags, message, self) => {
       const q = args.join(' ').trim();
       if (!q) { client.say(channel, `@${user} usage: !price <market name> — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or !price last`); break; }
       if (q.toLowerCase() === 'last') {
-        const items = getInventory(user);
+        const items = getInventory(userKey);
         if (!items.length) { client.say(channel, `@${user} you have no drops yet. Use !open first.`); break; }
         const last = items[items.length - 1];
         const mh = marketNameFromDrop(last);
@@ -1029,7 +761,7 @@ client.on('message', async (channel, tags, message, self) => {
     }
     case 'top': {
       let n = parseInt(args[0], 10); if (!Number.isFinite(n) || n <= 0) n = 5; n = Math.min(25, n);
-      const rows = await leaderboardTop(n);
+      const rows = await leaderboardTop(n, chan);
       if (!rows.length) { client.say(channel, `@${user} leaderboard is empty.`); break; }
       const line = rows.map((r, i) => `#${i+1} ${r.user}: $${r.total.toFixed(2)} (${r.count})`).join(' | ');
       client.say(channel, `Top ${rows.length} (by inventory value): ${line}`);
@@ -1040,11 +772,12 @@ client.on('message', async (channel, tags, message, self) => {
       if (!ADMIN_KEY || !PUBLIC_URL) { client.say(channel, `@${user} set ADMIN_KEY and PUBLIC_URL env vars to use this.`); break; }
       const base = PUBLIC_URL.endsWith('/') ? PUBLIC_URL.slice(0, -1) : PUBLIC_URL;
       const link = `${base}/backup?key=${ADMIN_KEY}`;
-      console.log('[indicouch] Backup URL:', link);
+      console.log('[dro_bot] Backup URL:', link);
       client.say(channel, `@${user} backup URL printed to server logs.`);
       break;
     }
     default:
+      // ignore unknown commands silently to avoid clashing with other bots
       break;
   }
 });
@@ -1069,25 +802,17 @@ function ensurePriceData() {
 
 function readPriceJSON(p, fallback) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return fallback; } }
 
-// Glove-safe market name builder
 function marketNameFromDrop(drop) {
   const wear = drop.wear;
-  const w = drop.weapon || '';
-  const isStar = w.startsWith('★');
-  const isGlove = /\bgloves?\b/i.test(w) || /hand wraps/i.test(w);
+  const isKnife = (drop.weapon || '').startsWith('★');
   const souv = drop.souvenir ? 'Souvenir ' : '';
-
-  if (isStar) {
-    // Knives & gloves both use the star; gloves never have StatTrak™
-    const label = w.replace('★', '').trim();
-    const maybeST = (drop.stattrak && !isGlove) ? 'StatTrak™ ' : '';
-    const name = (souv + '★ ' + maybeST + label + ' | ' + drop.name + ' (' + wear + ')').trim();
-    return _sanitizeGloveST(name);
+  if (isKnife) {
+    const knifeName = drop.weapon.replace('★', '').trim();
+    const starPart = '★ ' + (drop.stattrak ? 'StatTrak™ ' : '');
+    return (souv + starPart + knifeName + ' | ' + drop.name + ' (' + wear + ')').trim();
   }
-
-  // Regular guns can be StatTrak™
   const st = drop.stattrak ? 'StatTrak™ ' : '';
-  return (souv + st + w + ' | ' + drop.name + ' (' + wear + ')').trim();
+  return (souv + st + drop.weapon + ' | ' + drop.name + ' (' + wear + ')').trim();
 }
 
 const PriceService = {
@@ -1163,47 +888,11 @@ async function priceForMarketHash(marketHash) {
 
 ensurePriceData();
 
-// ---- Fuzzy + sanitize helpers for !price ----
+// ---- Fuzzy helpers for !price ----
 function _tokens(s) { return (s||'').toLowerCase().replace(/™/g,'').split(/[^a-z0-9]+/).filter(Boolean); }
 function _expandWearAbbr(tokens) { const out=[...tokens]; for (const t of tokens) { if (t==='fn') out.push('factory','new'); if (t==='mw') out.push('minimal','wear'); if (t==='ft') out.push('field','tested'); if (t==='ww') out.push('well','worn'); if (t==='bs') out.push('battle','scarred'); if (t==='st') out.push('stattrak'); } return out; }
-// Remove illegal "StatTrak™" from glove market names users might type
-function _sanitizeGloveST(name) {
-  // "★ StatTrak™ Sport Gloves | ..." → "★ Sport Gloves | ..."
-  return String(name).replace(
-    /(★\s+)(?:StatTrak™\s+)?((?:Bloodhound|Driver|Hand\s+Wraps|Moto|Specialist|Sport)\s+Gloves)/i,
-    '$1$2'
-  );
-}
-
-function _bestSkinportKeyForQuery(query) {
-  const map = PriceService._skinport && PriceService._skinport.map;
-  if (!map || map.size===0) return null;
-  const qTokens=_expandWearAbbr(_tokens(_sanitizeGloveST(query)));
-  let bestKey=null, bestScore=0;
-  for (const key of map.keys()) {
-    const k=key.toLowerCase().replace(/™/g,'');
-    let score=0;
-    for (const t of qTokens) if (k.includes(t)) score++;
-    if (score>bestScore) { bestScore=score; bestKey=key; }
-  }
-  return bestScore>=2?bestKey:null;
-}
-
-async function priceLookupFlexible(input) {
-  const cleaned = _sanitizeGloveST(input);
-
-  // 1) exact
-  let out=await priceForMarketHash(cleaned);
-  if (out && out.usd!=null) return { ...out, resolved: cleaned };
-
-  // 2) fuzzy via Skinport catalog (if loaded)
-  const candidate=_bestSkinportKeyForQuery(cleaned);
-  if (candidate) {
-    out=await priceForMarketHash(candidate);
-    if (out && out.usd!=null) return { ...out, resolved: candidate };
-  }
-  return { usd: null, resolved: cleaned };
-}
+function _bestSkinportKeyForQuery(query) { const map = PriceService._skinport && PriceService._skinport.map; if (!map || map.size===0) return null; const qTokens=_expandWearAbbr(_tokens(query)); let bestKey=null, bestScore=0; for (const key of map.keys()) { const k=key.toLowerCase().replace(/™/g,''); let score=0; for (const t of qTokens) if (k.includes(t)) score++; if (score>bestScore) { bestScore=score; bestKey=key; } } return bestScore>=2?bestKey:null; }
+async function priceLookupFlexible(input) { let out=await priceForMarketHash(input); if (out && out.usd!=null) return { ...out, resolved: input }; const candidate=_bestSkinportKeyForQuery(input); if (candidate) { out=await priceForMarketHash(candidate); if (out && out.usd!=null) return { ...out, resolved: candidate }; } return { usd: null, resolved: input }; }
 
 // kick off initial price prefetch in background (non-blocking)
 (async () => { try { await PriceService._fetchSkinportItems(); } catch (e) { /* ignore */ } })();

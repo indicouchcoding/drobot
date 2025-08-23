@@ -3,13 +3,15 @@ Indicouch Case-Opening Chatbot — Twitch (tmi.js)
 Author: you + GPT-5 Thinking
 License: MIT
 
-STREAM-READY • One-instance (no repeat replies) • Pricing • New Cases
+STREAM-READY • One-instance (no repeat replies) • Pricing • More Cases • Glove-safe
 - Robust anti-duplicate replies (even when Twitch omits message IDs)
 - CS2-style odds + wear
 - Pricing via Skinport + optional CSFloat (with fuzzy !price + !price last)
-- Added cases: CS:GO Weapon Case, Operation Breakout Weapon Case, Fever Case
-- Existing: Prisma 2, Dreams & Nightmares, Fracture
+- Cases: CS:GO Weapon Case, Operation Breakout Weapon Case, Fever Case,
+         Prisma 2, Dreams & Nightmares, Fracture, Gamma 2, eSports 2013 Winter,
+         Glove Case (rare special = gloves; no StatTrak™ / Souvenir)
 - Minimal HTTP server for Render health/backup
+- Friendly aliases so chat can type short names (e.g., !open glove)
 
 Quick start
 1) npm init -y && npm i tmi.js dotenv
@@ -63,7 +65,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || null; // e.g., https://your-service
 const CONFIG = {
   prefix: process.env.BOT_PREFIX || '!',
   defaultCaseKey: 'Prisma 2 Case',
-  maxOpensPerCommand: 5,
+  maxOpensPerCommand: parseInt(process.env.MAX_OPENS || '10', 10), // cap = 10
   stattrakChance: 0.10, // 10%
   souvenirChance: 0.00, // 0% (regular cases don't drop Souvenirs; leave 0)
   wearTiers: [
@@ -82,6 +84,24 @@ const CONFIG = {
     { key: 'Purple', color: 'Restricted', p: 0.1598 },
     { key: 'Blue', color: 'Mil-Spec', p: 0.7992 },
   ],
+};
+
+// ----------------- Case Aliases (friendly names) -----------------
+const CASE_ALIASES = {
+  // Glove Case
+  'glove': 'Glove Case',
+  'gloves': 'Glove Case',
+  'glovecase': 'Glove Case',
+  'glove case': 'Glove Case',
+
+  // Gamma 2
+  'gamma 2': 'Gamma 2 Case',
+  'gamma2': 'Gamma 2 Case',
+
+  // eSports 2013 Winter
+  'esports 2013 winter': 'eSports 2013 Winter Case',
+  'esports winter': 'eSports 2013 Winter Case',
+  'winter esports': 'eSports 2013 Winter Case',
 };
 
 // ----------------- Case + Skin Data -----------------
@@ -375,7 +395,8 @@ const CASES = {
       { weapon: '★ Bayonet', name: 'Tiger Tooth' },
     ],
   },
-   // --- Gamma 2 Case (Aug 18, 2016) ---
+
+  // Added earlier: Gamma 2 Case
   'Gamma 2 Case': {
     Blue: [
       { weapon: 'XM1014', name: 'Slipstream' },
@@ -463,8 +484,10 @@ const CASES = {
       { weapon: '★ M9 Bayonet', name: 'Bright Water' },
       { weapon: '★ M9 Bayonet', name: 'Black Laminate' },
     ],
-  }, 
-    'eSports 2013 Winter Case': {
+  },
+
+  // Added earlier: eSports 2013 Winter Case (Arms Deal knife set on Gold)
+  'eSports 2013 Winter Case': {
     Blue: [
       { weapon: 'Galil AR',   name: 'Blue Titanium' },
       { weapon: 'G3SG1',      name: 'Azure Zebra' },
@@ -549,7 +572,8 @@ const CASES = {
       { weapon: '★ M9 Bayonet', name: 'Urban Masked' },
     ],
   },
-    // New: Glove Case (released Nov 28, 2016) — Rare Special = Gloves
+
+  // New: Glove Case (rare special = gloves)
   'Glove Case': {
     Blue: [
       { weapon: 'Glock-18',    name: 'Ironwork' },
@@ -561,20 +585,20 @@ const CASES = {
       { weapon: 'Galil AR',    name: 'Black Sand' },
     ],
     Purple: [
-      { weapon: 'USP-S',       name: 'Cyrex' },
-      { weapon: 'M4A1-S',      name: 'Flashback' },
+      { weapon: 'USP-S',         name: 'Cyrex' },
+      { weapon: 'M4A1-S',        name: 'Flashback' },
       { weapon: 'Dual Berettas', name: 'Royal Consorts' },
-      { weapon: 'G3SG1',       name: 'Stinger' },
-      { weapon: 'Nova',        name: 'Gila' },
+      { weapon: 'G3SG1',         name: 'Stinger' },
+      { weapon: 'Nova',          name: 'Gila' },
     ],
     Pink: [
-      { weapon: 'FAMAS',       name: 'Mecha Industries' },
-      { weapon: 'P90',         name: 'Shallow Grave' },
-      { weapon: 'Sawed-Off',   name: 'Wasteland Princess' },
+      { weapon: 'FAMAS',      name: 'Mecha Industries' },
+      { weapon: 'P90',        name: 'Shallow Grave' },
+      { weapon: 'Sawed-Off',  name: 'Wasteland Princess' },
     ],
     Red: [
-      { weapon: 'M4A4',        name: 'Buzz Kill' },
-      { weapon: 'SSG 08',      name: 'Dragonfire' },
+      { weapon: 'M4A4',   name: 'Buzz Kill' },
+      { weapon: 'SSG 08', name: 'Dragonfire' },
     ],
     Gold: [
       // Bloodhound Gloves
@@ -634,9 +658,7 @@ function saveJSON(p, obj) { fs.writeFileSync(p, JSON.stringify(obj, null, 2)); }
 
 // ----------------- RNG Helpers -----------------
 function rng() { return Math.random(); }
-function weightedPick(items, weightProp = 'p') {
-  const r = rng(); let acc = 0; for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; } return items[items.length - 1];
-}
+function weightedPick(items, weightProp = 'p') { const r = rng(); let acc = 0; for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; } return items[items.length - 1]; }
 function pickWear() { const wear = weightedPick(CONFIG.wearTiers); const [min, max] = wear.float; const fl = +(min + rng() * (max - min)).toFixed(4); return { ...wear, float: fl }; }
 function pickRarity() { const rarityPool = [...CONFIG.rarities].reverse(); return weightedPick(rarityPool); }
 function pickSkin(caseKey, rarityKey) { const pool = CASES[caseKey]?.[rarityKey] || []; if (!pool.length) return null; return pool[Math.floor(rng() * pool.length)]; }
@@ -649,12 +671,7 @@ function openOne(caseKey) {
   const skin = pickSkin(caseKey, rarityKey);
   const wear = pickWear();
   const { stattrak, souvenir } = rollModifiers();
-    // Gloves don’t have StatTrak or Souvenir → force off
-  if ((drop.weapon || '').toLowerCase().includes('glove')) {
-    drop.stattrak = false;
-    drop.souvenir = false;
-  }
-  return {
+  const drop = {
     case: caseKey,
     rarity: rarityKey,
     wear: wear.key,
@@ -664,23 +681,37 @@ function openOne(caseKey) {
     weapon: skin?.weapon || 'Unknown',
     name: skin?.name || 'Mystery',
   };
+
+  // Gloves don’t have StatTrak or Souvenir → force off
+  if ((drop.weapon || '').toLowerCase().includes('glove') || /hand wraps/i.test(drop.weapon || '')) {
+    drop.stattrak = false;
+    drop.souvenir = false;
+  }
+  return drop;
 }
 
 // ----------------- Formatting -----------------
 function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'🩷':rarity==='Purple'?'🟣':'🔵'; }
-function formatDrop(drop) { const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak'); const prefix=parts.length?parts.join(' ')+' ':''; const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join(''); const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:''; return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`; }
+function formatDrop(drop) {
+  const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak');
+  const prefix=parts.length?parts.join(' ')+' ':'';
+  const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join('');
+  const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:'';
+  return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`;
+}
+
 // --- Sort helper: higher tiers first, then higher $ value, then lower float ---
 const RARITY_RANK = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
 function sortByTierThenValue(a, b) {
   const ra = RARITY_RANK[a.rarity] || 0;
   const rb = RARITY_RANK[b.rarity] || 0;
-  if (ra !== rb) return rb - ra;                         // higher tier first
+  if (ra !== rb) return rb - ra; // higher tier first
   const va = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
   const vb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
-  if (va !== vb) return vb - va;                         // higher $ first
+  if (va !== vb) return vb - va; // higher $ first
   const fa = (typeof a.float === 'number') ? a.float : 1;
   const fb = (typeof b.float === 'number') ? b.float : 1;
-  return fa - fb;                                        // lower float first
+  return fa - fb; // lower float first
 }
 
 // ---- Rarity parsing + chunked chat sender ----
@@ -724,7 +755,7 @@ function isModOrBroadcaster(tags) { const badges = tags.badges || {}; return !!t
 const HELP_TEXT = [
   `Commands:`,
   `!cases — list cases`,
-  `!open <case> [xN|N] — open 1-5 cases`,
+  `!open <case> [xN|N] — open 1-10 cases`,
   `!inv [@user] — show inventory`,
   `!worth [@user] — inventory value (USD)`,
   `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,
@@ -733,12 +764,31 @@ const HELP_TEXT = [
   `!stats — global drop stats`,
   `!setcase <case> — set default case`,
   `!mycase — show your default case`,
+  `!dro / !drobot — quick intro`,
   `!help — this menu`,
 ].join(' | ');
 
 function setDefaultCase(user, caseKey) { const d=loadJSON(DEFAULTS_PATH); d[user]=caseKey; saveJSON(DEFAULTS_PATH, d); }
 function getDefaultCase(user) { const d=loadJSON(DEFAULTS_PATH); return d[user] || CONFIG.defaultCaseKey; }
-function resolveCaseKey(input) { if (!input) return null; const key=Object.keys(CASES).find(c=>c.toLowerCase()===input.toLowerCase()); if (key) return key; const hit=Object.keys(CASES).find(c=>c.toLowerCase().startsWith(input.toLowerCase())); return hit || null; }
+function resolveCaseKey(input) {
+  if (!input) return null;
+  const raw = String(input).trim().toLowerCase();
+
+  // 1) alias direct hit
+  if (CASE_ALIASES[raw]) return CASE_ALIASES[raw];
+
+  // 2) exact name match
+  const exact = Object.keys(CASES).find(c => c.toLowerCase() === raw);
+  if (exact) return exact;
+
+  // 3) startsWith fuzzy
+  const starts = Object.keys(CASES).find(c => c.toLowerCase().startsWith(raw));
+  if (starts) return starts;
+
+  // 4) contains fuzzy
+  const contains = Object.keys(CASES).find(c => c.toLowerCase().includes(raw));
+  return contains || null;
+}
 
 // Cooldowns (simple per-user)
 const cdMap = new Map();
@@ -764,7 +814,11 @@ client.say = (channel, text) => {
   return _say(channel, text);
 };
 
-client.connect().then(() => { ensureData(); console.log(`[indicouch:${INSTANCE_ID}] data dir = ${DATA_DIR}`); console.log(`[indicouch:${INSTANCE_ID}] connected to`, process.env.TWITCH_CHANNEL); }).catch(console.error);
+client.connect().then(() => {
+  ensureData();
+  console.log(`[indicouch:${INSTANCE_ID}] data dir = ${DATA_DIR}`);
+  console.log(`[indicouch:${INSTANCE_ID}] connected to`, process.env.TWITCH_CHANNEL);
+}).catch(console.error);
 
 // --- Minimal HTTP health server for Render Web Service ---
 const PORT = process.env.PORT || 3000;
@@ -805,15 +859,13 @@ client.on('message', async (channel, tags, message, self) => {
 
   const args = message.slice(CONFIG.prefix.length).trim().split(/\s+/);
   const cmd = args.shift()?.toLowerCase();
-      const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','invlist','stats','worth','price','top','backupurl','dro','drobot']);
-      if (!ALLOWED_CMDS.has(cmd)) return; // ignore non-bot commands like !so, !uptime, etc.
+
+  // only respond to our bot commands (ignore !so, !uptime, etc.)
+  const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','invlist','stats','worth','price','top','backupurl','dro','drobot']);
+  if (!ALLOWED_CMDS.has(cmd)) return;
 
   switch (cmd) {
-    case 'dro': {
-      const intro = `Yo, I’m Dro_bot_ v0.0.4.28 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
-      client.say(channel, intro);
-      break;
-    }
+    case 'dro':
     case 'drobot': {
       const intro = `Yo, I’m Dro_bot_ v0.0.4.28 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
       client.say(channel, intro);
@@ -838,7 +890,7 @@ client.on('message', async (channel, tags, message, self) => {
       break;
     }
     case 'open': {
-      // !open <case words...> [xN]
+      // !open <case words...> [xN] or [N]
       let count = 1;
       // accept quantity as last token: either "xN" or just "N"
       let qtyIdx = -1; let qtyMatch = null;
@@ -861,32 +913,31 @@ client.on('message', async (channel, tags, message, self) => {
         addToInventory(user, drop);
         pushStats(drop);
       }
-
       try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
 
-      if (count <= 5) {
+      // sort by rarity/price/float for display
       const sorted = [...results].sort(sortByTierThenValue);
-      const lines = sorted.map(formatDrop).join('  |  ');
-      client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
-      break;
+
+      if (count <= 5) {
+        const lines = sorted.map(formatDrop).join('  |  ');
+        client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
+        break;
       }
 
+      // Beyond 5: show top 5 by rarity/price, then summarize the rest
+      const head = sorted.slice(0, 5).map(formatDrop).join('  |  ');
+      const tail = sorted.slice(5);
 
-    // Beyond 5: sort everything by tier/value first
-    const sortedAll = [...results].sort(sortByTierThenValue);
-    const head = sortedAll.slice(0, 5).map(formatDrop).join('  |  ');
-    const tail = sortedAll.slice(5);
+      let tailValue = 0;
+      for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
 
-    let tailValue = 0;
-    for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
-
-    const reds  = tail.filter(d => d.rarity === 'Red').length;
-    const golds = tail.filter(d => d.rarity === 'Gold').length;
-    const lowFloat = tail.filter(d => d.float <= 0.05).length; // highlight super low floats
+      const reds  = tail.filter(d => d.rarity === 'Red').length;
+      const golds = tail.filter(d => d.rarity === 'Gold').length;
+      const lowFloat = tail.filter(d => d.float <= 0.05).length;
 
       const highlights = [
         golds ? `✨x${golds}` : null,
-        reds ? `🔴x${reds}` : null,
+        reds  ? `🔴x${reds}` : null,
         lowFloat ? `⬇️x${lowFloat}` : null,
       ].filter(Boolean).join(' ');
 
@@ -967,8 +1018,13 @@ client.on('message', async (channel, tags, message, self) => {
         client.say(channel, `@${user} ${mh} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
         break;
       }
-      try { const p = await priceLookupFlexible(q); if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find price for: ${q}`); break; } client.say(channel, `@${user} ${p.resolved} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`); }
-      catch { client.say(channel, `@${user} price lookup failed.`); }
+      try {
+        const p = await priceLookupFlexible(q);
+        if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find price for: ${q}`); break; }
+        client.say(channel, `@${user} ${p.resolved} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
+      } catch {
+        client.say(channel, `@${user} price lookup failed.`);
+      }
       break;
     }
     case 'top': {
@@ -989,7 +1045,6 @@ client.on('message', async (channel, tags, message, self) => {
       break;
     }
     default:
-      // ignore unknown commands silently to avoid clashing with other bots
       break;
   }
 });
@@ -1014,6 +1069,7 @@ function ensurePriceData() {
 
 function readPriceJSON(p, fallback) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return fallback; } }
 
+// Glove-safe market name builder
 function marketNameFromDrop(drop) {
   const wear = drop.wear;
   const w = drop.weapon || '';
@@ -1107,32 +1163,46 @@ async function priceForMarketHash(marketHash) {
 
 ensurePriceData();
 
-// ---- Fuzzy helpers for !price ----
+// ---- Fuzzy + sanitize helpers for !price ----
 function _tokens(s) { return (s||'').toLowerCase().replace(/™/g,'').split(/[^a-z0-9]+/).filter(Boolean); }
 function _expandWearAbbr(tokens) { const out=[...tokens]; for (const t of tokens) { if (t==='fn') out.push('factory','new'); if (t==='mw') out.push('minimal','wear'); if (t==='ft') out.push('field','tested'); if (t==='ww') out.push('well','worn'); if (t==='bs') out.push('battle','scarred'); if (t==='st') out.push('stattrak'); } return out; }
-function _bestSkinportKeyForQuery(query) { const map = PriceService._skinport && PriceService._skinport.map; if (!map || map.size===0) return null; const qTokens=_expandWearAbbr(_tokens(query)); let bestKey=null, bestScore=0; for (const key of map.keys()) { const k=key.toLowerCase().replace(/™/g,''); let score=0; for (const t of qTokens) if (k.includes(t)) score++; if (score>bestScore) { bestScore=score; bestKey=key; } } return bestScore>=2?bestKey:null; }
-async function priceLookupFlexible(input) {
-  const cleaned = _sanitizeGloveST(input);
-  // 1) exact
-  let out = await priceForMarketHash(cleaned);
-  if (out && out.usd != null) return { ...out, resolved: cleaned };
-  // 2) fuzzy via Skinport catalog (if loaded)
-  const candidate = _bestSkinportKeyForQuery(cleaned);
-  if (candidate) {
-    out = await priceForMarketHash(candidate);
-    if (out && out.usd != null) return { ...out, resolved: candidate };
-  }
-  return { usd: null, resolved: cleaned };
-}
-
 // Remove illegal "StatTrak™" from glove market names users might type
 function _sanitizeGloveST(name) {
-  // Matches: "★ StatTrak™ Sport Gloves | ..." → "★ Sport Gloves | ..."
-  // Also covers Bloodhound/Driver/Hand Wraps/Moto/Specialist/Sport
+  // "★ StatTrak™ Sport Gloves | ..." → "★ Sport Gloves | ..."
   return String(name).replace(
     /(★\s+)(?:StatTrak™\s+)?((?:Bloodhound|Driver|Hand\s+Wraps|Moto|Specialist|Sport)\s+Gloves)/i,
     '$1$2'
   );
+}
+
+function _bestSkinportKeyForQuery(query) {
+  const map = PriceService._skinport && PriceService._skinport.map;
+  if (!map || map.size===0) return null;
+  const qTokens=_expandWearAbbr(_tokens(_sanitizeGloveST(query)));
+  let bestKey=null, bestScore=0;
+  for (const key of map.keys()) {
+    const k=key.toLowerCase().replace(/™/g,'');
+    let score=0;
+    for (const t of qTokens) if (k.includes(t)) score++;
+    if (score>bestScore) { bestScore=score; bestKey=key; }
+  }
+  return bestScore>=2?bestKey:null;
+}
+
+async function priceLookupFlexible(input) {
+  const cleaned = _sanitizeGloveST(input);
+
+  // 1) exact
+  let out=await priceForMarketHash(cleaned);
+  if (out && out.usd!=null) return { ...out, resolved: cleaned };
+
+  // 2) fuzzy via Skinport catalog (if loaded)
+  const candidate=_bestSkinportKeyForQuery(cleaned);
+  if (candidate) {
+    out=await priceForMarketHash(candidate);
+    if (out && out.usd!=null) return { ...out, resolved: candidate };
+  }
+  return { usd: null, resolved: cleaned };
 }
 
 // kick off initial price prefetch in background (non-blocking)

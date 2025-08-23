@@ -865,21 +865,36 @@ const HELP_TEXT = [
 
 // --- Channels parsing (multi-channel support) ---
 const CHANNELS = (process.env.TWITCH_CHANNELS || process.env.TWITCH_CHANNEL || '')
-  .split(/[,\s]+/)                           // split on commas or spaces
-  .map(s => s.trim().replace(/^@/, '').toLowerCase())
+  .split(/[,\s]+/)
+  .map(s => s.trim().replace(/^[@#]/, '').toLowerCase()) // strip @ or # just in case
   .filter(Boolean);
 
-if (CHANNELS.length === 0) {
+const UNIQUE_CHANNELS = [...new Set(CHANNELS)];
+
+if (UNIQUE_CHANNELS.length === 0) {
   console.error('[drobot] No channels configured. Set TWITCH_CHANNELS or TWITCH_CHANNEL.');
   process.exit(1);
 }
+
+console.log('[drobot] Will join channels:', UNIQUE_CHANNELS.map(c => `#${c}`).join(', '));
 
 // ----------------- Twitch Client -----------------
 const client = new tmi.Client({
   options: { skipUpdatingEmotesets: true },
   connection: { secure: true, reconnect: true },
   identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
-  channels: CHANNELS,   // ⬅️ use the parsed list
+  channels: UNIQUE_CHANNELS, // <- use the parsed list
+});
+
+// Helpful connection logs
+client.on('connected', (addr, port) => {
+  console.log(`[drobot] Connected to ${addr}:${port}`);
+});
+client.on('join', (channel, username, self) => {
+  if (self) console.log(`[drobot] Joined ${channel}`);
+});
+client.on('part', (channel, username, self) => {
+  if (self) console.log(`[drobot] Parted ${channel}`);
 });
 
 // Safety net: drop identical chat lines emitted back-to-back within 1.5s per channel

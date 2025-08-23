@@ -3,28 +3,22 @@ Dro_bot_ — CS2 Case-Opening Chatbot (tmi.js)
 Author: you + GPT-5 Thinking
 License: MIT
 
-STREAM-READY • One-instance (no repeat replies) • Pricing • Multi-channel
-- Robust anti-duplicate replies (even when Twitch omits message IDs)
-- CS2-style odds + wear
-- Pricing via Skinport + optional CSFloat (with fuzzy !price + !price last)
-- Cases: CS:GO Weapon Case, Operation Breakout Weapon Case, Fever Case,
-         Glove Case, Prisma 2, Dreams & Nightmares, Fracture
+STREAM-READY • Anti-dup • Pricing • Multi-channel inventories with migration
+- CS2-style odds & wear, price checks (Skinport + optional CSFloat)
+- Fuzzy !price + !price last
+- Cases: CS:GO Weapon Case, Operation Breakout Weapon Case, Fever Case, Glove Case,
+         Prisma 2, Dreams & Nightmares, Fracture
+- Inventories are now namespaced per channel:  "<channel>:<username>"
+  • Legacy-friendly: reads old keys and migrates them automatically on first touch
+  • Mod command `!migrateinv` bulk-migrates all legacy keys for the current channel
 - Minimal HTTP server for Render health/backup
-- Multi-channel support via TWITCH_CHANNELS (per-channel inventories/leaderboards)
 
 Quick start
-1) npm init -y && npm i tmi.js dotenv
-2) .env →
-   TWITCH_USERNAME=bot_username
-   TWITCH_OAUTH=oauth:xxxxxxxxxxxxxxxx
-   TWITCH_CHANNELS=channelA, channelB   # join multiple (or use TWITCH_CHANNEL for single)
-   BOT_PREFIX=!
-   PRICE_PROVIDER=best_of
-   PRICE_CURRENCY=USD
-   CSFLOAT_API_KEY=    # optional
-   DATA_DIR=/var/data/indicouch           # if using a persistent disk
+1) npm i tmi.js dotenv
+2) .env → TWITCH_USERNAME, TWITCH_OAUTH, TWITCH_CHANNEL, BOT_PREFIX=!,
+            PRICE_PROVIDER=best_of, PRICE_CURRENCY=USD, CSFLOAT_API_KEY=(optional),
+            DATA_DIR=/var/data/indicouch (if using disk)
 3) node indicouch-case-bot.js
---------------------------------------------------------------------------------
 */
 
 import fs from 'fs';
@@ -34,19 +28,13 @@ import dotenv from 'dotenv';
 import http from 'http';
 dotenv.config();
 
-// Instance tag helps detect duplicate processes in logs
+// ----------------- Instance + Anti-dup -----------------
 const INSTANCE_ID = Math.random().toString(36).slice(2, 8);
 
-// Multi-channel support: TWITCH_CHANNELS="chanA, chanB  chanC"
-const CHANNELS = (process.env.TWITCH_CHANNELS || process.env.TWITCH_CHANNEL || '')
-  .split(/[,\s]+/)
-  .map(s => s.replace(/^#/, '').trim().toLowerCase())
-  .filter(Boolean);
-
-// Robust de-dupe: prefer Twitch message id; fallback to fingerprint(user+room+message)
+// Prefer Twitch message id; fallback to fingerprint(user+room+message)
 const SEEN_IDS = new Set();
 const SEEN_FPS = new Map(); // key -> ts
-function _fp(tags, message) {
+function fp(tags, message) {
   const u = (tags['user-id'] || tags.username || '').toString();
   const r = (tags['room-id'] || '').toString();
   const m = (message || '').trim().toLowerCase();
@@ -60,7 +48,7 @@ function alreadyHandled(tags, message) {
     setTimeout(() => SEEN_IDS.delete(id), 5 * 60 * 1000);
     return false;
   }
-  const key = _fp(tags, message);
+  const key = fp(tags, message);
   const now = Date.now();
   const last = SEEN_FPS.get(key) || 0;
   if (now - last < 6000) return true;
@@ -70,78 +58,35 @@ function alreadyHandled(tags, message) {
 }
 
 // Optional admin controls for backup endpoint
-const ADMIN_KEY = process.env.ADMIN_KEY || null;
-const PUBLIC_URL = process.env.PUBLIC_URL || null;
+const ADMIN_KEY = process.env.ADMIN_KEY || null; // set to any secret string
+const PUBLIC_URL = process.env.PUBLIC_URL || null; // e.g., https://your-service.onrender.com
 
 // ----------------- Config -----------------
 const CONFIG = {
   prefix: process.env.BOT_PREFIX || '!',
   defaultCaseKey: 'Prisma 2 Case',
-  maxOpensPerCommand: 100,
-  stattrakChance: 0.10, // 10%
-  souvenirChance: 0.00, // 0% (regular cases don't drop Souvenirs; leave 0)
+  maxOpensPerCommand: 5,         // <= you asked to put it back to 10
+  stattrakChance: 0.10,           // 10%
+  souvenirChance: 0.00,           // regular cases: 0
   wearTiers: [
-    { key: 'Factory New', short: 'FN', p: 0.03, float: [0.00, 0.07] },
-    { key: 'Minimal Wear', short: 'MW', p: 0.07, float: [0.07, 0.15] },
-    { key: 'Field-Tested', short: 'FT', p: 0.38, float: [0.15, 0.38] },
-    { key: 'Well-Worn', short: 'WW', p: 0.38, float: [0.38, 0.45] },
+    { key: 'Factory New',  short: 'FN', p: 0.03,  float: [0.00, 0.07] },
+    { key: 'Minimal Wear', short: 'MW', p: 0.07,  float: [0.07, 0.15] },
+    { key: 'Field-Tested', short: 'FT', p: 0.38,  float: [0.15, 0.38] },
+    { key: 'Well-Worn',    short: 'WW', p: 0.38,  float: [0.38, 0.45] },
     { key: 'Battle-Scarred', short: 'BS', p: 0.14, float: [0.45, 1.00] },
   ],
   rarities: [
-    { key: 'Gold', color: '★', p: 0.0026 },      // 0.26%
-    { key: 'Red', color: 'Covert', p: 0.0064 },  // 0.64%
-    { key: 'Pink', color: 'Classified', p: 0.032 },
+    { key: 'Gold',   color: '★',          p: 0.0026 }, // 0.26%
+    { key: 'Red',    color: 'Covert',     p: 0.0064 }, // 0.64%
+    { key: 'Pink',   color: 'Classified', p: 0.032  },
     { key: 'Purple', color: 'Restricted', p: 0.1598 },
-    { key: 'Blue', color: 'Mil-Spec', p: 0.7992 },
+    { key: 'Blue',   color: 'Mil-Spec',   p: 0.7992 },
   ],
 };
 
-// ----------------- Case + Skin Data -----------------
-// Each case has arrays keyed by rarity; each skin has name + weapon.
+// ----------------- Cases -----------------
 const CASES = {
-  // New: Glove Case (★ gloves on Gold)
-  'Glove Case': {
-    Blue: [
-      { weapon: 'Glock-18', name: 'Ironwork' },
-      { weapon: 'P2000', name: 'Turf' },
-      { weapon: 'MAG-7', name: 'Sonar' },
-      { weapon: 'MP7', name: 'Cirrus' },
-      { weapon: 'G3SG1', name: 'Stinger' },
-    ],
-    Purple: [
-      { weapon: 'CZ75-Auto', name: 'Polymer' },
-      { weapon: 'P90', name: 'Shallow Grave' },
-      { weapon: 'Galil AR', name: 'Black Sand' },
-    ],
-    Pink: [
-      { weapon: 'M4A4', name: 'Buzz Kill' },
-      { weapon: 'SSG 08', name: 'Dragonfire' },
-    ],
-    Red: [
-      { weapon: 'FAMAS', name: 'Mecha Industries' },
-      { weapon: 'Sawed-Off', name: 'Wasteland Princess' },
-    ],
-    Gold: [
-      { weapon: '★ Sport Gloves', name: 'Hedge Maze' },
-      { weapon: '★ Sport Gloves', name: 'Pandora\'s Box' },
-      { weapon: '★ Sport Gloves', name: 'Superconductor' },
-      { weapon: '★ Sport Gloves', name: 'Vice' },
-      { weapon: '★ Specialist Gloves', name: 'Crimson Kimono' },
-      { weapon: '★ Specialist Gloves', name: 'Emerald Web' },
-      { weapon: '★ Specialist Gloves', name: 'Foundation' },
-      { weapon: '★ Specialist Gloves', name: 'Forest DDPAT' },
-      { weapon: '★ Moto Gloves', name: 'Spearmint' },
-      { weapon: '★ Moto Gloves', name: 'Boom!' },
-      { weapon: '★ Moto Gloves', name: 'Eclipse' },
-      { weapon: '★ Moto Gloves', name: 'Cool Mint' },
-      { weapon: '★ Hand Wraps', name: 'Badlands' },
-      { weapon: '★ Hand Wraps', name: 'Overprint' },
-      { weapon: '★ Hand Wraps', name: 'Leather' },
-      { weapon: '★ Hand Wraps', name: 'Cobalt Skulls' },
-    ],
-  },
-
-  // CS:GO Weapon Case (classic knives on Gold)
+  // New: CS:GO Weapon Case (classic knives on Gold)
   'CS:GO Weapon Case': {
     Blue: [
       { weapon: 'MP7', name: 'Skulls' },
@@ -164,6 +109,7 @@ const CASES = {
       { weapon: 'AK-47', name: 'Redline' },
     ],
     Gold: [
+      // Bayonet
       { weapon: '★ Bayonet', name: 'Fade' },
       { weapon: '★ Bayonet', name: 'Case Hardened' },
       { weapon: '★ Bayonet', name: 'Crimson Web' },
@@ -175,6 +121,7 @@ const CASES = {
       { weapon: '★ Bayonet', name: 'Safari Mesh' },
       { weapon: '★ Bayonet', name: 'Scorched' },
       { weapon: '★ Bayonet', name: 'Urban Masked' },
+      // Flip
       { weapon: '★ Flip Knife', name: 'Fade' },
       { weapon: '★ Flip Knife', name: 'Case Hardened' },
       { weapon: '★ Flip Knife', name: 'Crimson Web' },
@@ -186,6 +133,7 @@ const CASES = {
       { weapon: '★ Flip Knife', name: 'Safari Mesh' },
       { weapon: '★ Flip Knife', name: 'Scorched' },
       { weapon: '★ Flip Knife', name: 'Urban Masked' },
+      // Gut
       { weapon: '★ Gut Knife', name: 'Fade' },
       { weapon: '★ Gut Knife', name: 'Case Hardened' },
       { weapon: '★ Gut Knife', name: 'Crimson Web' },
@@ -197,6 +145,7 @@ const CASES = {
       { weapon: '★ Gut Knife', name: 'Safari Mesh' },
       { weapon: '★ Gut Knife', name: 'Scorched' },
       { weapon: '★ Gut Knife', name: 'Urban Masked' },
+      // Karambit
       { weapon: '★ Karambit', name: 'Fade' },
       { weapon: '★ Karambit', name: 'Case Hardened' },
       { weapon: '★ Karambit', name: 'Crimson Web' },
@@ -208,6 +157,7 @@ const CASES = {
       { weapon: '★ Karambit', name: 'Safari Mesh' },
       { weapon: '★ Karambit', name: 'Scorched' },
       { weapon: '★ Karambit', name: 'Urban Masked' },
+      // M9
       { weapon: '★ M9 Bayonet', name: 'Fade' },
       { weapon: '★ M9 Bayonet', name: 'Case Hardened' },
       { weapon: '★ M9 Bayonet', name: 'Crimson Web' },
@@ -222,7 +172,7 @@ const CASES = {
     ],
   },
 
-  // Operation Breakout Weapon Case (Butterfly knives on Gold)
+  // New: Operation Breakout Weapon Case (Butterfly knives on Gold)
   'Operation Breakout Weapon Case': {
     Blue: [
       { weapon: 'PP-Bizon', name: 'Osiris' },
@@ -259,7 +209,7 @@ const CASES = {
     ],
   },
 
-  // Fever Case (classic knives on Gold)
+  // New: Fever Case (classic knives on Gold)
   'Fever Case': {
     Blue: [
       { weapon: 'MP9', name: 'Goo' },
@@ -282,6 +232,7 @@ const CASES = {
       { weapon: 'Desert Eagle', name: 'Blaze' },
     ],
     Gold: [
+      // reuse classic knives
       { weapon: '★ Bayonet', name: 'Fade' },
       { weapon: '★ Bayonet', name: 'Case Hardened' },
       { weapon: '★ Bayonet', name: 'Crimson Web' },
@@ -337,6 +288,52 @@ const CASES = {
       { weapon: '★ M9 Bayonet', name: 'Safari Mesh' },
       { weapon: '★ M9 Bayonet', name: 'Scorched' },
       { weapon: '★ M9 Bayonet', name: 'Urban Masked' },
+    ],
+  },
+
+  // New: Glove Case (GOLD = Gloves)
+  'Glove Case': {
+    Blue: [
+      { weapon: 'CZ75-Auto', name: 'Polymer' },
+      { weapon: 'G3SG1', name: 'Stinger' },
+      { weapon: 'MP7', name: 'Cirrus' },
+      { weapon: 'Nova', name: 'Gila' },
+      { weapon: 'P2000', name: 'Turf' },
+    ],
+    Purple: [
+      { weapon: 'Galil AR', name: 'Black Sand' },
+      { weapon: 'M4A4', name: 'Buzz Kill' },
+      { weapon: 'Sawed-Off', name: 'Wasteland Princess' },
+    ],
+    Pink: [
+      { weapon: 'FAMAS', name: 'Mecha Industries' },
+      { weapon: 'P90', name: 'Shallow Grave' },
+    ],
+    Red: [
+      { weapon: 'SSG 08', name: 'Dragonfire' },
+      { weapon: 'PP-Bizon', name: 'Judgement of Anubis' },
+    ],
+    Gold: [
+      { weapon: '★ Sport Gloves',       name: 'Pandora’s Box' },
+      { weapon: '★ Sport Gloves',       name: 'Vice' },
+      { weapon: '★ Sport Gloves',       name: 'Hedge Maze' },
+      { weapon: '★ Sport Gloves',       name: 'Amphibious' },
+      { weapon: '★ Specialist Gloves',  name: 'Crimson Kimono' },
+      { weapon: '★ Specialist Gloves',  name: 'Emerald Web' },
+      { weapon: '★ Specialist Gloves',  name: 'Fade' },
+      { weapon: '★ Specialist Gloves',  name: 'Forest DDPAT' },
+      { weapon: '★ Hand Wraps',         name: 'Cobalt Skulls' },
+      { weapon: '★ Hand Wraps',         name: 'Leather' },
+      { weapon: '★ Hand Wraps',         name: 'Overprint' },
+      { weapon: '★ Hand Wraps',         name: 'Slaughter' },
+      { weapon: '★ Moto Gloves',        name: 'Spearmint' },
+      { weapon: '★ Moto Gloves',        name: 'Cool Mint' },
+      { weapon: '★ Moto Gloves',        name: 'Boom!' },
+      { weapon: '★ Moto Gloves',        name: 'Polygon' },
+      { weapon: '★ Driver Gloves',      name: 'King Snake' },
+      { weapon: '★ Driver Gloves',      name: 'Lunar Weave' },
+      { weapon: '★ Driver Gloves',      name: 'Diamondback' },
+      { weapon: '★ Driver Gloves',      name: 'Convoy' },
     ],
   },
 
@@ -437,357 +434,99 @@ function ensureData() {
   if (!fs.existsSync(STATS_PATH)) fs.writeFileSync(STATS_PATH, JSON.stringify({ opens: 0, drops: {} }, null, 2));
   if (!fs.existsSync(DEFAULTS_PATH)) fs.writeFileSync(DEFAULTS_PATH, JSON.stringify({}, null, 2));
 }
-
 function loadJSON(p) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; } }
 function saveJSON(p, obj) { fs.writeFileSync(p, JSON.stringify(obj, null, 2)); }
 
-// ----------------- RNG Helpers -----------------
+// ----------------- RNG + Sim -----------------
 function rng() { return Math.random(); }
-function weightedPick(items, weightProp = 'p') { const r = rng(); let acc = 0; for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; } return items[items.length - 1]; }
+function weightedPick(items, weightProp = 'p') {
+  const r = rng(); let acc = 0; for (const it of items) { acc += it[weightProp]; if (r <= acc) return it; } return items[items.length - 1];
+}
 function pickWear() { const wear = weightedPick(CONFIG.wearTiers); const [min, max] = wear.float; const fl = +(min + rng() * (max - min)).toFixed(4); return { ...wear, float: fl }; }
 function pickRarity() { const rarityPool = [...CONFIG.rarities].reverse(); return weightedPick(rarityPool); }
 function pickSkin(caseKey, rarityKey) { const pool = CASES[caseKey]?.[rarityKey] || []; if (!pool.length) return null; return pool[Math.floor(rng() * pool.length)]; }
 function rollModifiers() { const stattrak = rng() < CONFIG.stattrakChance; const souvenir = CONFIG.souvenirChance > 0 && rng() < CONFIG.souvenirChance; return { stattrak, souvenir }; }
-
-// ----------------- Core Sim -----------------
 function openOne(caseKey) {
   const rarity = pickRarity();
-  const rarityKey = rarity.key;
-  const skin = pickSkin(caseKey, rarityKey);
+  const skin = pickSkin(caseKey, rarity.key);
   const wear = pickWear();
   const { stattrak, souvenir } = rollModifiers();
   return {
     case: caseKey,
-    rarity: rarityKey,
+    rarity: rarity.key,
     wear: wear.key,
     float: wear.float,
     stattrak,
     souvenir,
-    weapon: skin?.weapon || 'Unknown',
+    weapon: skin?.weapon || (rarity.key === 'Gold' ? '★' : 'Unknown'),
     name: skin?.name || 'Mystery',
   };
 }
 
 // ----------------- Formatting -----------------
-function rarityEmoji(r) { return r==='Gold'?'✨':r==='Red'?'🔴':r==='Pink'?'🩷':r==='Purple'?'🟣':'🔵'; }
+function rarityEmoji(rarity) { return rarity==='Gold'?'✨':rarity==='Red'?'🔴':rarity==='Pink'?'💗':rarity==='Purple'?'🟣':'🔵'; }
 function formatDrop(drop) {
-  const mods=[]; if(drop.souvenir) mods.push('Souvenir'); if(drop.stattrak) mods.push('StatTrak');
-  const prefix = mods.length ? mods.join(' ')+' ' : '';
+  const parts=[]; if(drop.souvenir) parts.push('Souvenir'); if(drop.stattrak) parts.push('StatTrak');
+  const prefix=parts.length?parts.join(' ')+' ':'';
   const wearShort=(drop.wear||'').split(' ').map(s=>s[0]).join('');
   const price=(typeof drop.priceUSD==='number')?` • $${drop.priceUSD.toFixed(2)}`:'';
   return `${rarityEmoji(drop.rarity)} ${prefix}${drop.weapon} | ${drop.name} (${wearShort} • ${drop.float.toFixed(4)})${price}`;
 }
 
-// ---- Rarity parsing + chunked chat sender ----
-function normalizeRarity(input) {
-  if (!input) return null;
-  const t = String(input).toLowerCase();
-  if (t==='gold'||t==='✨'||t==='yellow'||t==='knife'||t==='glove') return 'Gold';
-  if (t==='red'||t==='covert'||t==='🔴') return 'Red';
-  if (t==='pink'||t==='classified'||t==='🩷'||t==='🟠') return 'Pink';
-  if (t==='purple'||t==='restricted'||t==='🟣') return 'Purple';
-  if (t==='blue'||t==='mil-spec'||t==='🔵') return 'Blue';
-  return null;
-}
-async function sayChunkedList(channel, header, lines) {
-  const chunks=[]; let buf=header;
-  for (const ln of lines) {
-    const add=(buf.length?' | ':'')+ln;
-    if ((buf+add).length>400) { chunks.push(buf); buf=ln; } else { buf+=add; }
+// ----------------- Channel/User key helpers -----------------
+function chanName(channel) { return String(channel).replace(/^#/, '').toLowerCase(); }
+function nsKey(channel, username) { return `${chanName(channel)}:${String(username).toLowerCase()}`; }
+function mergeArrays(a, b) { return [].concat(a || [], b || []); }
+
+// ----------------- Inventories & Stats (with migration) -----------------
+function getInventory(userKey) {
+  const inv = loadJSON(INV_PATH);
+
+  // New (namespaced) key
+  if (inv[userKey]) return inv[userKey];
+
+  // Legacy fallback: move <username> -> <channel:username>
+  const legacyKey = userKey.includes(':') ? userKey.split(':')[1] : userKey;
+  if (inv[legacyKey]) {
+    const merged = mergeArrays(inv[userKey], inv[legacyKey]);
+    inv[userKey] = merged;
+    delete inv[legacyKey];
+    saveJSON(INV_PATH, inv);
+    return merged;
   }
-  if (buf) chunks.push(buf);
-  for (const c of chunks) { try { await client.say(channel, c); } catch(e){ console.log('[chat chunk error]', e?.message||e); } }
+  return [];
 }
 
-// ----------------- Inventories & Stats -----------------
-const DATA_DIR_BASE = DATA_DIR;
-function addToInventory(userKey, drop) { const inv=loadJSON(INV_PATH); (inv[userKey] ||= []).push(drop); saveJSON(INV_PATH, inv); }
-function getInventory(userKey) { const inv=loadJSON(INV_PATH); return inv[userKey] || []; }
-function pushStats(drop) { const stats=loadJSON(STATS_PATH); stats.opens=(stats.opens||0)+1; stats.drops=stats.drops||{}; stats.drops[drop.rarity]=(stats.drops[drop.rarity]||0)+1; saveJSON(STATS_PATH, stats); }
-function getStats() { const stats=loadJSON(STATS_PATH); const total=stats.opens||0; const by=stats.drops||{}; const fmt=['Gold','Red','Pink','Purple','Blue'].map(r=>`${rarityEmoji(r)} ${r}: ${by[r]||0}`).join(' | '); return { total, fmt }; }
+function addToInventory(userKey, drop) {
+  const inv = loadJSON(INV_PATH);
+  const legacyKey = userKey.includes(':') ? userKey.split(':')[1] : userKey;
 
-// ----------------- Value & Leaderboard -----------------
-async function ensurePriceOnDrop(drop) { if (typeof drop.priceUSD==='number') return drop.priceUSD; try { const p=await PriceService.priceForDrop(drop); if (p&&typeof p.usd==='number'){ drop.priceUSD=p.usd; return drop.priceUSD; } } catch{} return null; }
-async function inventoryValue(userKey) { const items=getInventory(userKey); let sum=0; for (const d of items){ const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } return { totalUSD:+sum.toFixed(2), count: items.length }; }
+  // Fold legacy once
+  if (inv[legacyKey]) {
+    inv[userKey] = mergeArrays(inv[userKey], inv[legacyKey]);
+    delete inv[legacyKey];
+  }
+
+  (inv[userKey] ||= []).push(drop);
+  saveJSON(INV_PATH, inv);
+}
+
 function getAllInventories() { return loadJSON(INV_PATH) || {}; }
-async function leaderboardTop(n=5, chan) {
-  const inv=getAllInventories(); const rows=[]; const prefix=`${chan}:`;
-  for (const [key, items] of Object.entries(inv)) {
-    if (!key.startsWith(prefix)) continue;
-    let sum=0; for (const d of items){ const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; }
-    rows.push({ user:key.slice(prefix.length), total:+sum.toFixed(2), count: items.length });
-  }
-  rows.sort((a,b)=>b.total-a.total);
-  return rows.slice(0, Math.max(1, Math.min(25, n)));
+
+function pushStats(drop) {
+  const stats=loadJSON(STATS_PATH);
+  stats.opens=(stats.opens||0)+1;
+  stats.drops=stats.drops||{};
+  stats.drops[drop.rarity]=(stats.drops[drop.rarity]||0)+1;
+  saveJSON(STATS_PATH, stats);
 }
-
-// ----------------- Command Router -----------------
-function isModOrBroadcaster(tags) { const badges = tags.badges || {}; return !!tags.mod || badges.broadcaster === '1'; }
-const HELP_TEXT = [
-  `Commands:`,
-  `!cases — list cases`,
-  `!open <case> [xN|N] — open 1-100 cases`,
-  `!inv [@user] — show inventory`,
-  `!worth [@user] — inventory value (USD)`,
-  `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,
-  `!top [N] — leaderboard by inventory value`,
-  `!invlist <rarity> [@user] — list your items of that rarity (mods can target @user)`,
-  `!stats — global drop stats`,
-  `!setcase <case> — set default case`,
-  `!mycase — show your default case`,
-  `!dro / !drobot — intro blurb`,
-  `!help — this menu`,
-].join(' | ');
-
-function setDefaultCase(userKey, caseKey) { const d=loadJSON(DEFAULTS_PATH); d[userKey]=caseKey; saveJSON(DEFAULTS_PATH, d); }
-function getDefaultCase(userKey) { const d=loadJSON(DEFAULTS_PATH); return d[userKey] || CONFIG.defaultCaseKey; }
-function resolveCaseKey(input) { if (!input) return null; const key=Object.keys(CASES).find(c=>c.toLowerCase()===input.toLowerCase()); if (key) return key; const hit=Object.keys(CASES).find(c=>c.toLowerCase().startsWith(input.toLowerCase())); return hit || null; }
-
-// Cooldowns (simple per-user across all channels)
-const cdMap = new Map();
-const COOLDOWN_MS = 3000;
-function onCooldown(userScopedKey) { const now=Date.now(); const last=cdMap.get(userScopedKey)||0; if (now-last<COOLDOWN_MS) return true; cdMap.set(userScopedKey, now); return false; }
-
-// ----------------- Twitch Client -----------------
-const client = new tmi.Client({
-  options: { skipUpdatingEmotesets: true },
-  connection: { secure: true, reconnect: true },
-  identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
-  channels: CHANNELS.length ? CHANNELS : [],
-});
-
-// Safety net: drop identical chat lines emitted back-to-back within 1.5s per channel
-const LAST_OUT = new Map();
-const _say = (...args) => tmi.Client.prototype.say.apply(client, args);
-client.say = (channel, text) => {
-  const prev = LAST_OUT.get(channel);
-  const now = Date.now();
-  if (prev && prev.text === String(text) && (now - prev.ts) < 1500) return;
-  LAST_OUT.set(channel, { text: String(text), ts: now });
-  return _say(channel, text);
-};
-
-client.connect().then(() => {
-  ensureData();
-  console.log(`[indicouch:${INSTANCE_ID}] data dir = ${DATA_DIR}`);
-  console.log(`[indicouch:${INSTANCE_ID}] connected; channels=`, CHANNELS);
-}).catch(console.error);
-
-// --- Minimal HTTP health server for Render Web Service ---
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-  try {
-    const u = new URL(req.url, 'http://localhost');
-    if (u.pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
-    if (u.pathname === '/backup') {
-      if (!ADMIN_KEY || u.searchParams.get('key') !== ADMIN_KEY) { res.writeHead(401, { 'Content-Type': 'text/plain' }); return res.end('unauthorized'); }
-      const payload = { version: 1, ts: Date.now(), inventories: loadJSON(INV_PATH), stats: loadJSON(STATS_PATH), defaults: loadJSON(DEFAULTS_PATH) };
-      const body = JSON.stringify(payload, null, 2);
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="indicouch-backup.json"' });
-      return res.end(body);
-    }
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Dro_bot_ OK');
-  } catch (e) {
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('server error');
-  }
-}).listen(PORT, () => console.log(`[indicouch:${INSTANCE_ID}] health on :${PORT}`));
-
-client.on('message', async (channel, tags, message, self) => {
-  if (self) return;
-  if (alreadyHandled(tags, message)) return;
-  const user = (tags['display-name'] || tags.username || 'user').toLowerCase();
-  const chan = channel.replace(/^#/, '').toLowerCase();
-  const userKey = `${chan}:${user}`;
-
-  if (!message.startsWith(CONFIG.prefix)) return;
-
-  const args = message.slice(CONFIG.prefix.length).trim().split(/\s+/);
-  const cmd = args.shift()?.toLowerCase();
-  const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','invlist','stats','worth','price','top','backupurl','dro','drobot']);
-  if (!ALLOWED_CMDS.has(cmd)) return;
-
-  if (onCooldown(`${chan}:${user}`)) return;
-
-  switch (cmd) {
-    case 'dro':
-    case 'drobot': {
-      const intro = `Yo, I’m Dro_bot_ v0.0.4.28 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
-      client.say(channel, intro);
-      break;
-    }
-    case 'help':
-      client.say(channel, HELP_TEXT);
-      break;
-    case 'cases':
-      client.say(channel, `Available cases: ${Object.keys(CASES).join(' | ')}`);
-      break;
-    case 'mycase': {
-      client.say(channel, `@${user} your default case is: ${getDefaultCase(userKey)}`);
-      break;
-    }
-    case 'setcase': {
-      const input = args.join(' ');
-      const key = resolveCaseKey(input);
-      if (!key) { client.say(channel, `@${user} I don't recognize that case.`); break; }
-      setDefaultCase(userKey, key);
-      client.say(channel, `@${user} default case set to: ${key}`);
-      break;
-    }
-    case 'open': {
-      // !open <case words...> [xN] or [N]
-      let count = 1;
-      let qtyIdx = -1, qtyMatch = null;
-      for (let i = args.length - 1; i >= 0; i--) {
-        const m = /^x?([0-9]+)$/i.exec(args[i]);
-        if (m) { qtyIdx = i; qtyMatch = m; break; }
-      }
-      if (qtyIdx >= 0) {
-        count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(qtyMatch[1], 10)));
-        args.splice(qtyIdx, 1);
-      }
-      const caseInput = args.join(' ');
-      const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(userKey);
-      if (!caseKey) { client.say(channel, `@${user} pick a case with !cases or set one with !setcase <case>.`); break; }
-
-      const results = [];
-      for (let i = 0; i < count; i++) {
-        const drop = openOne(caseKey);
-        results.push(drop);
-        addToInventory(userKey, drop);
-        pushStats(drop);
-      }
-
-      try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
-
-      if (count <= 5) {
-        const lines = results.map(formatDrop).join('  |  ');
-        client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
-        break;
-      }
-
-      const head = results.slice(0, 5).map(formatDrop).join('  |  ');
-      const tail = results.slice(5);
-
-      let tailValue = 0;
-      for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
-
-      const reds = tail.filter(d => d.rarity === 'Red').length;
-      const golds = tail.filter(d => d.rarity === 'Gold').length;
-      const lowFloat = tail.filter(d => d.float <= 0.05).length;
-
-      const highlights = [
-        golds ? `✨x${golds}` : null,
-        reds ? `🔴x${reds}` : null,
-        lowFloat ? `⬇️x${lowFloat}` : null,
-      ].filter(Boolean).join(' ');
-
-      const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
-      const hl = highlights ? ` Highlights: ${highlights}` : '';
-
-      client.say(channel, `@${user} opened ${count}x ${caseKey}: ${head}  |  ${more}.${hl}`);
-      break;
-    }
-    case 'inv': {
-      const target = (args[0]?.replace('@','') || user).toLowerCase();
-      const targetKey = `${chan}:${target}`;
-      const items = getInventory(targetKey);
-      if (items.length === 0) { client.say(channel, `@${user} ${target} has an empty inventory. Use !open to pull some heat.`); break; }
-      const counts = { Gold:0, Red:0, Pink:0, Purple:0, Blue:0 };
-      for (const it of items) if (counts[it.rarity] != null) counts[it.rarity]++;
-      const order = ['Gold','Red','Pink','Purple','Blue'];
-      const parts = order.map(r => `${rarityEmoji(r)} ${r}: ${counts[r] || 0}`).join(' | ');
-      client.say(channel, `@${user} ${target}'s inventory (${items.length} items) — ${parts}`);
-      break;
-    }
-    case 'invlist': {
-      const rarityArg = (args[0] || '').toLowerCase();
-      const rarityKey = normalizeRarity(rarityArg);
-      if (!rarityKey) { client.say(channel, `@${user} usage: !invlist <gold|red|pink|purple|blue> [@user]`); break; }
-      let targetUser = user;
-      if (args[1]) {
-        const maybe = args[1].replace('@','').toLowerCase();
-        if (isModOrBroadcaster(tags)) targetUser = maybe; else { client.say(channel, `@${user} mods/broadcaster only to target another user.`); break; }
-      }
-      const targetKey = `${chan}:${targetUser}`;
-      const items = getInventory(targetKey).filter(it => it.rarity === rarityKey);
-      if (!items.length) { client.say(channel, `@${user} ${targetUser} has no ${rarityKey} items yet.`); break; }
-      const basic = (d) => {
-        const mods=[]; if (d.souvenir) mods.push('Souvenir'); if (d.stattrak) mods.push('StatTrak');
-        const prefix = mods.length ? mods.join(' ')+' ' : '';
-        const wearShort = (d.wear || '').split(' ').map(s => s[0]).join('');
-        return `${prefix}${d.weapon} | ${d.name} (${wearShort})`;
-      };
-      const lines = items.map(basic);
-      const head = `@${user} [${rarityEmoji(rarityKey)} ${rarityKey}] ${items.length} item(s)` + (targetUser!==user?` for @${targetUser}`:'') + ':';
-      await sayChunkedList(channel, head, lines);
-      break;
-    }
-    case 'stats': {
-      const s = getStats();
-      client.say(channel, `Drops so far — Total opens: ${s.total} | ${s.fmt}`);
-      break;
-    }
-    case 'worth': {
-      const rawTarget = (args[0]?.replace('@','') || user).toLowerCase();
-      const isSelf = rawTarget === user;
-      const targetKey = `${chan}:${rawTarget}`;
-      const { totalUSD, count } = await inventoryValue(targetKey);
-      if (count === 0) {
-        if (isSelf) client.say(channel, `@${user} you have an empty inventory.`);
-        else client.say(channel, `@${user} @${rawTarget} has an empty inventory.`);
-        break;
-      }
-      const msg = isSelf
-        ? `@${user} inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`
-        : `@${user} @${rawTarget}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`;
-      client.say(channel, msg);
-      break;
-    }
-    case 'price': {
-      const q = args.join(' ').trim();
-      if (!q) { client.say(channel, `@${user} usage: !price <market name> — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or !price last`); break; }
-      if (q.toLowerCase() === 'last') {
-        const items = getInventory(userKey);
-        if (!items.length) { client.say(channel, `@${user} you have no drops yet. Use !open first.`); break; }
-        const last = items[items.length - 1];
-        const mh = marketNameFromDrop(last);
-        const p = await priceForMarketHash(mh);
-        if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find price for your last drop.`); break; }
-        client.say(channel, `@${user} ${mh} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
-        break;
-      }
-      try {
-        const p = await priceLookupFlexible(q);
-        if (!p || p.usd == null) { client.say(channel, `@${user} couldn't find price for: ${q}`); break; }
-        client.say(channel, `@${user} ${p.resolved} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
-      } catch {
-        client.say(channel, `@${user} price lookup failed.`);
-      }
-      break;
-    }
-    case 'top': {
-      let n = parseInt(args[0], 10); if (!Number.isFinite(n) || n <= 0) n = 5; n = Math.min(25, n);
-      const rows = await leaderboardTop(n, chan);
-      if (!rows.length) { client.say(channel, `@${user} leaderboard is empty.`); break; }
-      const line = rows.map((r, i) => `#${i+1} ${r.user}: $${r.total.toFixed(2)} (${r.count})`).join(' | ');
-      client.say(channel, `Top ${rows.length} (by inventory value): ${line}`);
-      break;
-    }
-    case 'backupurl': {
-      if (!isModOrBroadcaster(tags)) { client.say(channel, `@${user} mods/broadcaster only.`); break; }
-      if (!ADMIN_KEY || !PUBLIC_URL) { client.say(channel, `@${user} set ADMIN_KEY and PUBLIC_URL env vars to use this.`); break; }
-      const base = PUBLIC_URL.endsWith('/') ? PUBLIC_URL.slice(0, -1) : PUBLIC_URL;
-      const link = `${base}/backup?key=${ADMIN_KEY}`;
-      console.log('[dro_bot] Backup URL:', link);
-      client.say(channel, `@${user} backup URL printed to server logs.`);
-      break;
-    }
-    default:
-      break;
-  }
-});
+function getStats() {
+  const stats=loadJSON(STATS_PATH);
+  const total=stats.opens||0;
+  const by=stats.drops||{};
+  const fmt=['Gold','Red','Pink','Purple','Blue'].map(r=>`${rarityEmoji(r)} ${r}: ${by[r]||0}`).join(' | ');
+  return { total, fmt };
+}
 
 // ----------------- Pricing (Skinport + CSFloat) -----------------
 const PRICE_CFG = {
@@ -806,17 +545,16 @@ function ensurePriceData() {
   if (!fs.existsSync(SKINPORT_CACHE)) fs.writeFileSync(SKINPORT_CACHE, JSON.stringify({ fetchedAt: 0, items: [] }, null, 2));
   if (!fs.existsSync(PRICE_CACHE)) fs.writeFileSync(PRICE_CACHE, JSON.stringify({}, null, 2));
 }
-
 function readPriceJSON(p, fallback) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fallback; } }
 
 function marketNameFromDrop(drop) {
   const wear = drop.wear;
-  const isStar = (drop.weapon || '').startsWith('★');  // knives & gloves
+  const isKnifeOrGlove = (drop.weapon || '').startsWith('★');
   const souv = drop.souvenir ? 'Souvenir ' : '';
-  if (isStar) {
-    const starName = drop.weapon.replace('★', '').trim();
+  if (isKnifeOrGlove) {
+    const name = drop.weapon.replace('★', '').trim();
     const starPart = '★ ' + (drop.stattrak ? 'StatTrak™ ' : '');
-    return (souv + starPart + starName + ' | ' + drop.name + ' (' + wear + ')').trim();
+    return (souv + starPart + name + ' | ' + drop.name + ' (' + wear + ')').trim();
   }
   const st = drop.stattrak ? 'StatTrak™ ' : '';
   return (souv + st + drop.weapon + ' | ' + drop.name + ' (' + wear + ')').trim();
@@ -825,6 +563,7 @@ function marketNameFromDrop(drop) {
 const PriceService = {
   _skinport: { fetchedAt: 0, map: new Map() },
   _cache: readPriceJSON(PRICE_CACHE, {}),
+
   async _fetchSkinportItems() {
     const now = Date.now();
     const cached = readPriceJSON(SKINPORT_CACHE, { fetchedAt: 0, items: [] });
@@ -840,14 +579,35 @@ const PriceService = {
     this._skinport.map = new Map(items.map(it => [it.market_hash_name, it]));
     fs.writeFileSync(SKINPORT_CACHE, JSON.stringify({ fetchedAt: now, items }, null, 2));
   },
-  _fromCache(marketHash) { const c=this._cache[marketHash]; if (!c) return null; if (Date.now() - (c.fetchedAt || 0) > PRICE_CFG.ttlMs) return null; return c; },
-  _saveCache(marketHash, obj) { this._cache[marketHash]=obj; fs.writeFileSync(PRICE_CACHE, JSON.stringify(this._cache, null, 2)); },
+
+  _fromCache(marketHash) {
+    const c = this._cache[marketHash];
+    if (!c) return null;
+    if (Date.now() - (c.fetchedAt || 0) > PRICE_CFG.ttlMs) return null;
+    return c;
+  },
+
+  _saveCache(marketHash, obj) {
+    this._cache[marketHash] = obj;
+    fs.writeFileSync(PRICE_CACHE, JSON.stringify(this._cache, null, 2));
+  },
+
   async _getFromSkinport(marketHash) {
     await this._fetchSkinportItems();
     const row = this._skinport.map.get(marketHash);
     if (!row) return null;
-    return { provider: 'skinport', currency: row.currency || PRICE_CFG.currency, min: row.min_price ?? null, median: row.median_price ?? null, mean: row.mean_price ?? null, suggested: row.suggested_price ?? null, url: row.item_page || row.market_page || null, fetchedAt: Date.now() };
+    return {
+      provider: 'skinport',
+      currency: row.currency || PRICE_CFG.currency,
+      min: row.min_price ?? null,
+      median: row.median_price ?? null,
+      mean: row.mean_price ?? null,
+      suggested: row.suggested_price ?? null,
+      url: row.item_page || row.market_page || null,
+      fetchedAt: Date.now(),
+    };
   },
+
   async _getFromCSFloat(marketHash) {
     if (!PRICE_CFG.csfloatKey) return null;
     const u = new URL('https://csfloat.com/api/v1/listings');
@@ -861,13 +621,16 @@ const PriceService = {
     if (!first || !first.price) return null;
     return { provider: 'csfloat', currency: 'USD', floor: first.price / 100, url: 'https://csfloat.com', fetchedAt: Date.now() };
   },
+
   async priceForDrop(drop) {
     const marketHash = marketNameFromDrop(drop);
     const cached = this._fromCache(marketHash);
     if (cached) return cached;
+
     let sp=null, cf=null;
     if (PRICE_CFG.provider === 'skinport' || PRICE_CFG.provider === 'best_of') sp = await this._getFromSkinport(marketHash);
     if (PRICE_CFG.provider === 'csfloat'  || PRICE_CFG.provider === 'best_of') cf = await this._getFromCSFloat(marketHash);
+
     let usd=null, source=null, url=null;
     if (cf && typeof cf.floor === 'number') { usd = cf.floor; source = 'CSFloat floor'; url = cf.url; }
     if (sp && (sp.median != null || sp.min != null || sp.mean != null || sp.suggested != null)) {
@@ -888,9 +651,13 @@ async function priceForMarketHash(marketHash) {
   if (provider === 'csfloat'  || provider === 'best_of') cf = await PriceService._getFromCSFloat(marketHash);
   let usd=null, source=null, url=null;
   if (cf && typeof cf.floor === 'number') { usd = cf.floor; source = 'CSFloat floor'; url = cf.url; }
-  if (sp && (sp.median != null || sp.min != null || sp.mean != null || sp.suggested != null)) { const val = sp.median ?? sp.min ?? sp.mean ?? sp.suggested; if (usd == null || (typeof val === 'number' && val < usd)) { usd = val; source = 'Skinport median'; url = sp.url; } }
+  if (sp && (sp.median != null || sp.min != null || sp.mean != null || sp.suggested != null)) {
+    const val = sp.median ?? sp.min ?? sp.mean ?? sp.suggested;
+    if (usd == null || (typeof val === 'number' && val < usd)) { usd = val; source = 'Skinport median'; url = sp.url; }
+  }
   const out = { marketHash, usd: (typeof usd === 'number' ? Math.round(usd * 100) / 100 : null), source, url, fetchedAt: Date.now() };
-  PriceService._saveCache(marketHash, out); return out;
+  PriceService._saveCache(marketHash, out);
+  return out;
 }
 
 ensurePriceData();
@@ -901,11 +668,357 @@ function _expandWearAbbr(tokens) { const out=[...tokens]; for (const t of tokens
 function _bestSkinportKeyForQuery(query) { const map = PriceService._skinport && PriceService._skinport.map; if (!map || map.size===0) return null; const qTokens=_expandWearAbbr(_tokens(query)); let bestKey=null, bestScore=0; for (const key of map.keys()) { const k=key.toLowerCase().replace(/™/g,''); let score=0; for (const t of qTokens) if (k.includes(t)) score++; if (score>bestScore) { bestScore=score; bestKey=key; } } return bestScore>=2?bestKey:null; }
 async function priceLookupFlexible(input) { let out=await priceForMarketHash(input); if (out && out.usd!=null) return { ...out, resolved: input }; const candidate=_bestSkinportKeyForQuery(input); if (candidate) { out=await priceForMarketHash(candidate); if (out && out.usd!=null) return { ...out, resolved: candidate }; } return { usd: null, resolved: input }; }
 
-// kick off initial price prefetch in background (non-blocking)
+// ----------------- Values & Leaderboard -----------------
+async function ensurePriceOnDrop(drop) { if (typeof drop.priceUSD === 'number') return drop.priceUSD; try { const p=await PriceService.priceForDrop(drop); if (p && typeof p.usd==='number') { drop.priceUSD=p.usd; return drop.priceUSD; } } catch {} return null; }
+async function inventoryValue(userKey) { const items=getInventory(userKey); let sum=0; for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } return { totalUSD:+sum.toFixed(2), count: items.length }; }
+
+async function leaderboardTop(n = 5, channelName) {
+  const inv = getAllInventories();
+  const rows = [];
+  const prefix = `${channelName}:`;
+
+  for (const [key, items] of Object.entries(inv)) {
+    if (key.includes(':')) {
+      if (!key.startsWith(prefix)) continue; // only this channel
+      let sum = 0; for (const d of items) { const v = await ensurePriceOnDrop(d); if (typeof v === 'number') sum += v; }
+      rows.push({ user: key.slice(prefix.length), total: +sum.toFixed(2), count: items.length });
+    } else {
+      // Legacy (no channel): show in this channel until migrated
+      let sum = 0; for (const d of items) { const v = await ensurePriceOnDrop(d); if (typeof v === 'number') sum += v; }
+      rows.push({ user: key, total: +sum.toFixed(2), count: items.length });
+    }
+  }
+
+  rows.sort((a, b) => b.total - a.total);
+  return rows.slice(0, Math.max(1, Math.min(25, n)));
+}
+
+// ----------------- Defaults helpers -----------------
+function setDefaultCase(user, caseKey) { const d=loadJSON(DEFAULTS_PATH); d[user]=caseKey; saveJSON(DEFAULTS_PATH, d); }
+function getDefaultCase(user) { const d=loadJSON(DEFAULTS_PATH); return d[user] || CONFIG.defaultCaseKey; }
+
+// ----------------- Rarity parsing + chunked chat -----------------
+function normalizeRarity(input) {
+  if (!input) return null;
+  const t = String(input).toLowerCase();
+  if (t === 'gold' || t === '✨' || t === 'yellow' || t === 'knife' || t === 'glove') return 'Gold';
+  if (t === 'red' || t === 'covert' || t === '🔴') return 'Red';
+  if (t === 'pink' || t === 'classified' || t === '💗') return 'Pink';
+  if (t === 'purple' || t === 'restricted' || t === '🟣') return 'Purple';
+  if (t === 'blue' || t === 'mil-spec' || t === '🔵') return 'Blue';
+  return null;
+}
+async function sayChunkedList(channel, header, lines) {
+  const chunks = [];
+  let buf = header;
+  for (const ln of lines) {
+    const add = (buf.length ? ' | ' : '') + ln;
+    if ((buf + add).length > 400) { chunks.push(buf); buf = ln; } else { buf += add; }
+  }
+  if (buf) chunks.push(buf);
+  for (const c of chunks) {
+    try { await client.say(channel, c); } catch (e) { console.log('[chat chunk error]', e?.message || e); }
+  }
+}
+
+// ----------------- Command Router -----------------
+function isModOrBroadcaster(tags) { const badges = tags.badges || {}; return !!tags.mod || badges.broadcaster === '1'; }
+
+const HELP_TEXT = [
+  `Commands:`,
+  `!cases — list cases`,
+  `!open <case> [xN|N] — open 1-10 cases`,
+  `!inv [@user] — show inventory (rarity counts)`,
+  `!invlist <rarity> [@user] — list items of that rarity (mods can target)`,
+  `!worth [@user] — inventory value (USD)`,
+  `!price <market name>|last — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or "last"`,
+  `!top [N] — leaderboard by inventory value`,
+  `!stats — global drop stats`,
+  `!setcase <case> — set default case`,
+  `!mycase — show your default case`,
+  `!dro | !drobot — about message`,
+  `!migrateinv — (mods) migrate legacy inventories for this channel`,
+].join(' | ');
+
+const client = new tmi.Client({
+  options: { skipUpdatingEmotesets: true },
+  connection: { secure: true, reconnect: true },
+  identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
+  channels: [process.env.TWITCH_CHANNEL],
+});
+
+// Safety net: drop identical chat lines emitted back-to-back within 1.5s per channel
+const LAST_OUT = new Map(); // channel -> { text, ts }
+const _say = (...args) => tmi.Client.prototype.say.apply(client, args);
+client.say = (channel, text) => {
+  const prev = LAST_OUT.get(channel);
+  const now = Date.now();
+  if (prev && prev.text === String(text) && (now - prev.ts) < 1500) return;
+  LAST_OUT.set(channel, { text: String(text), ts: now });
+  return _say(channel, text);
+};
+
+client.connect().then(() => {
+  ensureData(); ensurePriceData();
+  console.log(`[dro:${INSTANCE_ID}] data dir = ${DATA_DIR}`);
+  console.log(`[dro:${INSTANCE_ID}] connected to`, process.env.TWITCH_CHANNEL);
+}).catch(console.error);
+
+// --- Minimal HTTP health / backup ---
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  try {
+    const u = new URL(req.url, 'http://localhost');
+    if (u.pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
+    if (u.pathname === '/backup') {
+      if (!ADMIN_KEY || u.searchParams.get('key') !== ADMIN_KEY) { res.writeHead(401, { 'Content-Type': 'text/plain' }); return res.end('unauthorized'); }
+      const payload = { version: 1, ts: Date.now(), inventories: loadJSON(INV_PATH), stats: loadJSON(STATS_PATH), defaults: loadJSON(DEFAULTS_PATH) };
+      const body = JSON.stringify(payload, null, 2);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="dro_backup.json"' });
+      return res.end(body);
+    }
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Dro_bot_ OK');
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('server error');
+  }
+}).listen(PORT, () => console.log(`[dro:${INSTANCE_ID}] health on :${PORT}`));
+
+// ----------------- Defaults + Case resolution -----------------
+function resolveCaseKey(input) {
+  if (!input) return null;
+  const key = Object.keys(CASES).find(c => c.toLowerCase() === input.toLowerCase());
+  if (key) return key;
+  const hit = Object.keys(CASES).find(c => c.toLowerCase().startsWith(input.toLowerCase()));
+  return hit || null;
+}
+
+// Cooldowns (simple per-user)
+const cdMap = new Map();
+const COOLDOWN_MS = 3000;
+function onCooldown(user) { const now=Date.now(); const last=cdMap.get(user) || 0; if (now - last < COOLDOWN_MS) return true; cdMap.set(user, now); return false; }
+
+// ----------------- Chat Handler -----------------
+client.on('message', async (channel, tags, message, self) => {
+  if (self) return;
+  if (alreadyHandled(tags, message)) return; // robust local de-dupe
+  if (!message.startsWith(CONFIG.prefix)) return;
+
+  const display = (tags['display-name'] || tags.username || 'user').toLowerCase();
+  if (onCooldown(display)) return;
+
+  const args = message.slice(CONFIG.prefix.length).trim().split(/\s+/);
+  const cmd = args.shift()?.toLowerCase();
+
+  // Only respond to bot commands; ignore others like !so
+  const ALLOWED_CMDS = new Set(['help','cases','mycase','setcase','open','inv','invlist','stats','worth','price','top','backupurl','dro','drobot','migrateinv']);
+  if (!ALLOWED_CMDS.has(cmd)) return;
+
+  const ch = chanName(channel);
+  const selfKey = nsKey(channel, display);
+
+  switch (cmd) {
+    case 'dro':
+    case 'drobot': {
+      const intro = `Yo, I’m Dro_bot_ v0.0.4.28 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
+      client.say(channel, intro);
+      break;
+    }
+
+    case 'help':
+      client.say(channel, HELP_TEXT);
+      break;
+
+    case 'cases':
+      client.say(channel, `Available cases: ${Object.keys(CASES).join(' | ')}`);
+      break;
+
+    case 'mycase':
+      client.say(channel, `@${display} your default case is: ${getDefaultCase(display)}`);
+      break;
+
+    case 'setcase': {
+      const input = args.join(' ');
+      const key = resolveCaseKey(input);
+      if (!key) { client.say(channel, `@${display} I don't recognize that case.`); break; }
+      setDefaultCase(display, key);
+      client.say(channel, `@${display} default case set to: ${key}`);
+      break;
+    }
+
+    case 'open': {
+      // !open <case words...> [xN|N]
+      let count = 1;
+      let qtyIdx = -1; let qtyMatch = null;
+      for (let i = args.length - 1; i >= 0; i--) {
+        const m = /^x?([0-9]+)$/i.exec(args[i]);
+        if (m) { qtyIdx = i; qtyMatch = m; break; }
+      }
+      if (qtyIdx >= 0) {
+        count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(qtyMatch[1], 10)));
+        args.splice(qtyIdx, 1);
+      }
+      const caseInput = args.join(' ');
+      const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(display);
+      if (!caseKey) { client.say(channel, `@${display} pick a case with !cases or set one with !setcase <case>.`); break; }
+
+      const results = [];
+      for (let i = 0; i < count; i++) {
+        const drop = openOne(caseKey);
+        results.push(drop);
+        addToInventory(selfKey, drop);
+        pushStats(drop);
+      }
+      try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
+
+      if (count <= 5) {
+        const lines = results.map(formatDrop).join('  |  ');
+        client.say(channel, `@${display} opened ${count}x ${caseKey}: ${lines}`);
+      } else {
+        const head = results.slice(0, 5).map(formatDrop).join('  |  ');
+        const tail = results.slice(5);
+        let tailValue = 0; for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
+        const reds = tail.filter(d => d.rarity === 'Red').length;
+        const golds = tail.filter(d => d.rarity === 'Gold').length;
+        const lowFloat = tail.filter(d => d.float <= 0.05).length; // super low floats
+        const highlights = [golds?`✨x${golds}`:null, reds?`🔴x${reds}`:null, lowFloat?`⬇️x${lowFloat}`:null].filter(Boolean).join(' ');
+        const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
+        const hl = highlights ? ` Highlights: ${highlights}` : '';
+        client.say(channel, `@${display} opened ${count}x ${caseKey}: ${head}  |  ${more}.${hl}`);
+      }
+      break;
+    }
+
+    case 'inv': {
+      const target = (args[0]?.replace('@','') || display).toLowerCase();
+      const targetKey = nsKey(channel, target);
+      const items = getInventory(targetKey);
+      if (!items.length) { client.say(channel, `@${display} ${target} has an empty inventory. Use !open to pull some heat.`); break; }
+      const counts = { Gold:0, Red:0, Pink:0, Purple:0, Blue:0 };
+      for (const it of items) if (counts[it.rarity] != null) counts[it.rarity]++;
+      const order = ['Gold','Red','Pink','Purple','Blue'];
+      const parts = order.map(r => `${rarityEmoji(r)} ${r}: ${counts[r] || 0}`).join(' | ');
+      client.say(channel, `@${display} ${target}'s inventory (${items.length} items) — ${parts}`);
+      break;
+    }
+
+    case 'invlist': {
+      // !invlist <rarity> [@user]
+      const rarityArg = (args[0] || '').toLowerCase();
+      const rarityKey = normalizeRarity(rarityArg);
+      if (!rarityKey) { client.say(channel, `@${display} usage: !invlist <gold|red|pink|purple|blue> [@user]`); break; }
+      let targetUser = display;
+      if (args[1]) {
+        const maybe = args[1].replace('@','').toLowerCase();
+        if (isModOrBroadcaster(tags)) targetUser = maybe; else { client.say(channel, `@${display} mods/broadcaster only to target another user.`); break; }
+      }
+      const items = getInventory(nsKey(channel, targetUser)).filter(it => it.rarity === rarityKey);
+      if (!items.length) { client.say(channel, `@${display} ${targetUser} has no ${rarityKey} items yet.`); break; }
+      const basic = (d) => {
+        const parts = []; if (d.souvenir) parts.push('Souvenir'); if (d.stattrak) parts.push('StatTrak');
+        const prefix = parts.length ? parts.join(' ') + ' ' : '';
+        const wearShort = (d.wear || '').split(' ').map(s => s[0]).join('');
+        return `${prefix}${d.weapon} | ${d.name} (${wearShort})`;
+      };
+      const lines = items.map(basic);
+      const head = `@${display} [${rarityEmoji(rarityKey)} ${rarityKey}] ${items.length} item(s)` + (targetUser!==display?` for @${targetUser}`:'') + ':';
+      await sayChunkedList(channel, head, lines);
+      break;
+    }
+
+    case 'stats': {
+      const s = getStats();
+      client.say(channel, `Drops so far — Total opens: ${s.total} | ${s.fmt}`);
+      break;
+    }
+
+    case 'worth': {
+      const rawTarget = (args[0]?.replace('@','') || display).toLowerCase();
+      const isSelf = rawTarget === display;
+      const targetKey = nsKey(channel, rawTarget);
+      const { totalUSD, count } = await inventoryValue(targetKey);
+      if (count === 0) {
+        if (isSelf) client.say(channel, `@${display} you have an empty inventory.`);
+        else client.say(channel, `@${display} @${rawTarget} has an empty inventory.`);
+        break;
+      }
+      const msg = isSelf
+        ? `@${display} inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`
+        : `@${display} @${rawTarget}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`;
+      client.say(channel, msg);
+      break;
+    }
+
+    case 'price': {
+      const q = args.join(' ').trim();
+      if (!q) { client.say(channel, `@${display} usage: !price <market name> — e.g., StatTrak\u2122 AK-47 | Redline (Field-Tested) or !price last`); break; }
+      if (q.toLowerCase() === 'last') {
+        const items = getInventory(selfKey);
+        if (!items.length) { client.say(channel, `@${display} you have no drops yet. Use !open first.`); break; }
+        const last = items[items.length - 1];
+        const mh = marketNameFromDrop(last);
+        const p = await priceForMarketHash(mh);
+        if (!p || p.usd == null) { client.say(channel, `@${display} couldn't find price for your last drop.`); break; }
+        client.say(channel, `@${display} ${mh} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
+        break;
+      }
+      try {
+        const p = await priceLookupFlexible(q);
+        if (!p || p.usd == null) { client.say(channel, `@${display} couldn't find price for: ${q}`); break; }
+        client.say(channel, `@${display} ${p.resolved} ≈ $${p.usd.toFixed(2)} (${p.source || 'market'})`);
+      } catch {
+        client.say(channel, `@${display} price lookup failed.`);
+      }
+      break;
+    }
+
+    case 'top': {
+      let n = parseInt(args[0], 10); if (!Number.isFinite(n) || n <= 0) n = 5; n = Math.min(25, n);
+      const rows = await leaderboardTop(n, ch);
+      if (!rows.length) { client.say(channel, `@${display} leaderboard is empty.`); break; }
+      const line = rows.map((r, i) => `#${i+1} ${r.user}: $${r.total.toFixed(2)} (${r.count})`).join(' | ');
+      client.say(channel, `Top ${rows.length} (by inventory value): ${line}`);
+      break;
+    }
+
+    case 'migrateinv': {
+      if (!isModOrBroadcaster(tags)) { client.say(channel, `@${display} mods/broadcaster only.`); break; }
+      const prefix = `${ch}:`;
+      const inv = loadJSON(INV_PATH);
+      let moved = 0;
+      for (const [key, items] of Object.entries(inv)) {
+        if (key.includes(':')) continue; // already new format
+        const targetKey = prefix + key.toLowerCase();
+        inv[targetKey] = (inv[targetKey] || []).concat(items);
+        delete inv[key];
+        moved++;
+      }
+      saveJSON(INV_PATH, inv);
+      client.say(channel, `@${display} migrated ${moved} legacy inventories into this channel.`);
+      break;
+    }
+
+    case 'backupurl': {
+      if (!isModOrBroadcaster(tags)) { client.say(channel, `@${display} mods/broadcaster only.`); break; }
+      if (!ADMIN_KEY || !PUBLIC_URL) { client.say(channel, `@${display} set ADMIN_KEY and PUBLIC_URL env vars to use this.`); break; }
+      const base = PUBLIC_URL.endsWith('/') ? PUBLIC_URL.slice(0, -1) : PUBLIC_URL;
+      const link = `${base}/backup?key=${ADMIN_KEY}`;
+      console.log('[dro] Backup URL:', link);
+      client.say(channel, `@${display} backup URL printed to server logs.`);
+      break;
+    }
+
+    default:
+      break;
+  }
+});
+
+// ----------------- Background price prefetch + shutdown -----------------
 (async () => { try { await PriceService._fetchSkinportItems(); } catch {} })();
 setInterval(() => { PriceService._fetchSkinportItems().catch(() => {}); }, Math.max(PRICE_CFG.ttlMs, 300000));
 
-client.on('disconnected', (reason) => console.log(`[indicouch:${INSTANCE_ID}] disconnected:`, reason));
-function gracefulExit() { console.log(`[indicouch:${INSTANCE_ID}] shutting down`); try { client.disconnect(); } catch {} process.exit(0); }
+client.on('disconnected', (reason) => console.log(`[dro:${INSTANCE_ID}] disconnected:`, reason));
+function gracefulExit() { console.log(`[dro:${INSTANCE_ID}] shutting down`); try { client.disconnect(); } catch {} process.exit(0); }
 process.on('SIGTERM', gracefulExit);
 process.on('SIGINT', gracefulExit);

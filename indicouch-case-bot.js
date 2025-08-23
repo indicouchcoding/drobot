@@ -1022,7 +1022,23 @@ client.on('message', async (channel, tags, message, self) => {
       }
       try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
 
-      if (count <= 5) {
+// --- sort rarest + priciest first (no other changes) ---
+const __RARITY_SCORE = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
+results.sort((a, b) => {
+  // rarity first
+  const rd = (__RARITY_SCORE[b.rarity] || 0) - (__RARITY_SCORE[a.rarity] || 0);
+  if (rd) return rd;
+  // then price (higher first; unknowns last)
+  const pa = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
+  const pb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
+  if (pb !== pa) return pb - pa;
+  // then StatTrak
+  if (a.stattrak !== b.stattrak) return b.stattrak ? 1 : -1;
+  // finally lower float (better wear) first
+  return (a.float ?? 1) - (b.float ?? 1);
+});
+
+  if (count <= 5) {
         const lines = results.map(formatDrop).join('  |  ');
         client.say(channel, `@${display} opened ${count}x ${caseKey}: ${lines}`);
       } else {

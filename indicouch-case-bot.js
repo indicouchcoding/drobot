@@ -420,6 +420,129 @@ const CASES = {
       { weapon: '★ Bayonet', name: 'Tiger Tooth' },
     ],
   },
+   'Gamma 2 Case': {
+    Blue: [
+      { weapon: 'CZ75-Auto', name: 'Imprint' },
+      { weapon: 'Five-SeveN', name: 'Scumbria' },
+      { weapon: 'G3SG1', name: 'Ventilator' },
+      { weapon: 'Negev', name: 'Dazzle' },
+      { weapon: 'P90', name: 'Grim' },
+      { weapon: 'UMP-45', name: 'Briefing' },
+      { weapon: 'XM1014', name: 'Slipstream' },
+    ],
+    Purple: [
+      { weapon: 'Desert Eagle', name: 'Directive' },
+      { weapon: 'Glock-18', name: 'Weasel' },
+      { weapon: 'MAG-7', name: 'Petroglyph' },
+      { weapon: 'SCAR-20', name: 'Powercore' },
+      { weapon: 'SG 553', name: 'Triarch' },
+    ],
+    Pink: [
+      { weapon: 'AUG', name: 'Syd Mead' },
+      { weapon: 'MP9', name: 'Airlock' },
+      { weapon: 'Tec-9', name: 'Fuel Injector' },
+    ],
+    Red: [
+      { weapon: 'AK-47', name: 'Neon Revolution' },
+      { weapon: 'FAMAS', name: 'Roll Cage' },
+    ],
+    Gold: [
+      // Gamma knife finishes (representative set)
+      { weapon: '★ Bayonet', name: 'Lore' },
+      { weapon: '★ Bayonet', name: 'Gamma Doppler' },
+      { weapon: '★ Bayonet', name: 'Autotronic' },
+      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler' },
+      { weapon: '★ M9 Bayonet', name: 'Lore' },
+      { weapon: '★ Karambit', name: 'Autotronic' },
+      { weapon: '★ Karambit', name: 'Freehand' },
+      { weapon: '★ Flip Knife', name: 'Bright Water' },
+      { weapon: '★ Flip Knife', name: 'Gamma Doppler' },
+      { weapon: '★ Gut Knife', name: 'Black Laminate' },
+      { weapon: '★ Gut Knife', name: 'Freehand' },
+    ],
+  },
+
+  'eSports 2013 Winter Case': {
+    Blue: [
+      { weapon: 'P250', name: 'Steel Disruption' },
+      { weapon: 'G3SG1', name: 'Azure Zebra' },
+      { weapon: 'Nova', name: 'Ghost Camo' },
+      { weapon: 'PP-Bizon', name: 'Water Sigil' },
+      { weapon: 'Five-SeveN', name: 'Nightshade' },
+      { weapon: 'Galil AR', name: 'Blue Titanium' },
+    ],
+    Purple: [
+      { weapon: 'P90', name: 'Blind Spot' },
+      { weapon: 'AK-47', name: 'Blue Laminate' },
+    ],
+    Pink: [
+      { weapon: 'Desert Eagle', name: 'Cobalt Disruption' },
+      { weapon: 'AWP', name: 'Electric Hive' },
+      { weapon: 'FAMAS', name: 'Afterimage' },
+    ],
+    Red: [
+      { weapon: 'M4A4', name: 'X-Ray' },
+    ],
+    Gold: [
+      // Classic knives (representative set)
+      { weapon: '★ Bayonet', name: 'Fade' },
+      { weapon: '★ Bayonet', name: 'Case Hardened' },
+      { weapon: '★ Bayonet', name: 'Crimson Web' },
+      { weapon: '★ Flip Knife', name: 'Fade' },
+      { weapon: '★ Flip Knife', name: 'Night' },
+      { weapon: '★ Gut Knife', name: 'Blue Steel' },
+      { weapon: '★ Gut Knife', name: 'Safari Mesh' },
+      { weapon: '★ Karambit', name: 'Case Hardened' },
+      { weapon: '★ Karambit', name: 'Slaughter' },
+      { weapon: '★ M9 Bayonet', name: 'Crimson Web' },
+      { weapon: '★ M9 Bayonet', name: 'Urban Masked' },
+    ],
+  },
+
+  'Shattered Web Case': {
+    Blue: [
+      { weapon: 'P2000', name: 'Obsidian' },
+      { weapon: 'P90', name: 'Verdant Growth' },
+      { weapon: 'M249', name: 'Warbird' },
+      { weapon: 'SCAR-20', name: 'Torn' },
+      { weapon: 'R8 Revolver', name: 'Memento' },
+      { weapon: 'SSG 08', name: 'Threat Detected' },
+      { weapon: 'Sawed-Off', name: 'Apocalypto' },
+    ],
+    Purple: [
+      { weapon: 'AK-47', name: 'Rat Rod' },
+      { weapon: 'AUG', name: 'Arctic Wolf' },
+      { weapon: 'PP-Bizon', name: 'Embargo' },
+      { weapon: 'MP5-SD', name: 'Acid Wash' },
+      { weapon: 'G3SG1', name: 'Black Sand' },
+      { weapon: 'Dual Berettas', name: 'Balance' },
+      { weapon: 'Nova', name: 'Plume' },
+    ],
+    Pink: [
+      { weapon: 'SSG 08', name: 'Bloodshot' },
+      { weapon: 'SG 553', name: 'Colony IV' },
+      { weapon: 'Tec-9', name: 'Decimator' },
+    ],
+    Red: [
+      { weapon: 'AWP', name: 'Containment Breach' },
+      { weapon: 'MAC-10', name: 'Stalker' },
+    ],
+    Gold: [
+      // Shattered Web knives (Nomad/Skeleton/Survival/Paracord) — common finishes
+      { weapon: '★ Nomad Knife', name: 'Fade' },
+      { weapon: '★ Nomad Knife', name: 'Case Hardened' },
+      { weapon: '★ Nomad Knife', name: 'Night Stripe' },
+      { weapon: '★ Skeleton Knife', name: 'Crimson Web' },
+      { weapon: '★ Skeleton Knife', name: 'Blue Steel' },
+      { weapon: '★ Skeleton Knife', name: 'Urban Masked' },
+      { weapon: '★ Survival Knife', name: 'Forest DDPAT' },
+      { weapon: '★ Survival Knife', name: 'Safari Mesh' },
+      { weapon: '★ Survival Knife', name: 'Scorched' },
+      { weapon: '★ Paracord Knife', name: 'Stained' },
+      { weapon: '★ Paracord Knife', name: 'Case Hardened' },
+      { weapon: '★ Paracord Knife', name: 'Fade' },
+    ],
+  },      
 };
 
 // ----------------- Persistence -----------------

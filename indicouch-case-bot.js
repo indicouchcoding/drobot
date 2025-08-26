@@ -1,7 +1,6 @@
 /*
 Dro_bot_ — CS2 Case-Opening Chatbot (tmi.js)
-Author: you + GPT-5 Thinking
-License: MIT
+Author: Indicouchgaming/Indicouchcoding
 
 STREAM-READY • Anti-dup • Pricing • Multi-channel inventories with migration
 - CS2-style odds & wear, price checks (Skinport + optional CSFloat)
@@ -542,7 +541,73 @@ const CASES = {
       { weapon: '★ Paracord Knife', name: 'Case Hardened' },
       { weapon: '★ Paracord Knife', name: 'Fade' },
     ],
-  },      
+  },
+           'Gamma Case': {
+    Blue: [
+      { weapon: 'Five-SeveN', name: 'Violent Daimyo' },
+      { weapon: 'Tec-9', name: 'Ice Cap' },
+      { weapon: 'P250', name: 'Iron Clad' },
+      { weapon: 'MAC-10', name: 'Carnivore' },
+      { weapon: 'Nova', name: 'Exo' },
+      { weapon: 'SG 553', name: 'Aerial' },
+      { weapon: 'PP-Bizon', name: 'Harvester' },
+    ],
+    Purple: [
+      { weapon: 'AWP', name: 'Phobos' },
+      { weapon: 'AUG', name: 'Aristocrat' },
+      { weapon: 'P90', name: 'Chopper' },
+      { weapon: 'R8 Revolver', name: 'Reboot' },
+      { weapon: 'Sawed-Off', name: 'Limelight' },
+    ],
+    Pink: [
+      { weapon: 'M4A4', name: 'Desolate Space' },
+      { weapon: 'P2000', name: 'Imperial Dragon' },
+      { weapon: 'SCAR-20', name: 'Bloodsport' },
+    ],
+    Red: [
+      { weapon: 'M4A1-S', name: 'Mecha Industries' },
+      { weapon: 'Glock-18', name: 'Wasteland Rebel' },
+    ],
+    Gold: [
+      // Gamma knife set (30 total: 5 knife types × 6 finishes)
+      // Bayonet
+      { weapon: '★ Bayonet', name: 'Gamma Doppler' },
+      { weapon: '★ Bayonet', name: 'Lore' },
+      { weapon: '★ Bayonet', name: 'Autotronic' },
+      { weapon: '★ Bayonet', name: 'Black Laminate' },
+      { weapon: '★ Bayonet', name: 'Bright Water' },
+      { weapon: '★ Bayonet', name: 'Freehand' },
+      // Flip Knife
+      { weapon: '★ Flip Knife', name: 'Gamma Doppler' },
+      { weapon: '★ Flip Knife', name: 'Lore' },
+      { weapon: '★ Flip Knife', name: 'Autotronic' },
+      { weapon: '★ Flip Knife', name: 'Black Laminate' },
+      { weapon: '★ Flip Knife', name: 'Bright Water' },
+      { weapon: '★ Flip Knife', name: 'Freehand' },
+      // Gut Knife
+      { weapon: '★ Gut Knife', name: 'Gamma Doppler' },
+      { weapon: '★ Gut Knife', name: 'Lore' },
+      { weapon: '★ Gut Knife', name: 'Autotronic' },
+      { weapon: '★ Gut Knife', name: 'Black Laminate' },
+      { weapon: '★ Gut Knife', name: 'Bright Water' },
+      { weapon: '★ Gut Knife', name: 'Freehand' },
+      // Karambit
+      { weapon: '★ Karambit', name: 'Gamma Doppler' },
+      { weapon: '★ Karambit', name: 'Lore' },
+      { weapon: '★ Karambit', name: 'Autotronic' },
+      { weapon: '★ Karambit', name: 'Black Laminate' },
+      { weapon: '★ Karambit', name: 'Bright Water' },
+      { weapon: '★ Karambit', name: 'Freehand' },
+      // M9 Bayonet
+      { weapon: '★ M9 Bayonet', name: 'Gamma Doppler' },
+      { weapon: '★ M9 Bayonet', name: 'Lore' },
+      { weapon: '★ M9 Bayonet', name: 'Autotronic' },
+      { weapon: '★ M9 Bayonet', name: 'Black Laminate' },
+      { weapon: '★ M9 Bayonet', name: 'Bright Water' },
+      { weapon: '★ M9 Bayonet', name: 'Freehand' },
+    ],
+  },
+
 };
 
 // ----------------- Persistence -----------------

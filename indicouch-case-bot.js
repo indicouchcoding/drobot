@@ -947,59 +947,7 @@ async function priceLookupFlexible(input) { let out=await priceForMarketHash(inp
 
 // ----------------- Values & Leaderboard -----------------
 async function ensurePriceOnDrop(drop) { if (typeof drop.priceUSD === 'number') return drop.priceUSD; try { const p=await PriceService.priceForDrop(drop); if (p && typeof p.usd==='number') { drop.priceUSD=p.usd; return drop.priceUSD; } } catch {} return null; }
-// run promises with a concurrency cap
-async function asyncPool(limit, items, worker) {
-  const ret = [];
-  const executing = [];
-  for (const item of items) {
-    const p = Promise.resolve().then(() => worker(item));
-    ret.push(p);
-    if (limit <= items.length) {
-      const e = p.then(() => executing.splice(executing.indexOf(e), 1));
-      executing.push(e);
-      if (executing.length >= limit) await Promise.race(executing);
-    }
-  }
-  return Promise.all(ret);
-}
-async function inventoryValue(user) {
-  const items = getInventory(user);
-  if (!items.length) return { totalUSD: 0, count: 0 };
-
-  // seed sum with already-cached prices
-  let sum = 0;
-  const missing = [];
-
-  for (const d of items) {
-    if (typeof d.priceUSD === 'number') {
-      sum += d.priceUSD;
-    } else {
-      // group by market hash to de-dup identical lookups
-      const mh = marketNameFromDrop(d);
-      missing.push({ drop: d, mh });
-    }
-  }
-
-  // group by market hash
-  const byHash = new Map();
-  for (const m of missing) {
-    if (!byHash.has(m.mh)) byHash.set(m.mh, []);
-    byHash.get(m.mh).push(m.drop);
-  }
-
-  // price each distinct hash with concurrency (8)
-  const distinct = [...byHash.keys()];
-  await asyncPool(8, distinct, async (mh) => {
-    const p = await priceForMarketHash(mh);
-    if (p && typeof p.usd === 'number') {
-      const drops = byHash.get(mh);
-      for (const d of drops) d.priceUSD = p.usd; // persist for next time
-      sum += p.usd * drops.length;
-    }
-  });
-
-  return { totalUSD: +sum.toFixed(2), count: items.length };
-}
+async function inventoryValue(userKey) { const items=getInventory(userKey); let sum=0; for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } return { totalUSD:+sum.toFixed(2), count: items.length }; }
 
 async function leaderboardTop(n = 5, channelName) {
   const inv = getAllInventories();

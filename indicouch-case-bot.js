@@ -1000,14 +1000,58 @@ http.createServer((req, res) => {
   }
 }).listen(PORT, () => console.log(`[dro:${INSTANCE_ID}] health on :${PORT}`));
 
-// ----------------- Defaults + Case resolution -----------------
+// Smarter resolver: respects numbers (e.g., "Gamma" vs "Gamma 2") and a couple aliases.
+// Minimal + self-contained so we don't touch anything else.
 function resolveCaseKey(input) {
   if (!input) return null;
-  const key = Object.keys(CASES).find(c => c.toLowerCase() === input.toLowerCase());
-  if (key) return key;
-  const hit = Object.keys(CASES).find(c => c.toLowerCase().startsWith(input.toLowerCase()));
-  return hit || null;
+
+  const keys = Object.keys(CASES);
+  const norm = (s) => String(s).toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const q = norm(input);
+
+  // Tiny alias table (kept local to avoid global changes)
+  const aliases = {
+    'gamma': 'Gamma Case',
+    'gamma case': 'Gamma Case',
+    'gamma 2': 'Gamma 2 Case',
+    'gamma2': 'Gamma 2 Case',
+  };
+  if (aliases[q] && CASES[aliases[q]]) return aliases[q];
+
+  // 1) Exact match (case-insensitive via normalization)
+  const exact = keys.find((k) => norm(k) === q);
+  if (exact) return exact;
+
+  // 2) Token-aware + digit-aware fuzzy match
+  const qHasDigit = /\d/.test(q);
+  const stop = new Set(['case', 'weapon', 'operation', 'csgo', 'cs:go']);
+  const qTokens = q.split(' ').filter((t) => t && !stop.has(t));
+
+  // Prefer names that share the same "has digits" property as the query
+  let candidates = keys.filter((k) => {
+    const nk = norm(k);
+    const kHasDigit = /\d/.test(nk);
+    if (qHasDigit !== kHasDigit) return false;
+    return qTokens.every((t) => nk.includes(t));
+  });
+
+  // 3) Fallback: startsWith, still guarding against digit mismatch
+  if (candidates.length === 0) {
+    candidates = keys.filter((k) => {
+      const nk = norm(k);
+      if (!nk.startsWith(q)) return false;
+      if (!qHasDigit && /\d/.test(nk)) return false; // "gamma" should not hit "gamma 2"
+      return true;
+    });
+  }
+
+  if (candidates.length === 0) return null;
+
+  // 4) Prefer the shortest case name (e.g., "Gamma Case" over "Gamma 2 Case")
+  candidates.sort((a, b) => a.length - b.length || a.localeCompare(b));
+  return candidates[0];
 }
+
 
 // Cooldowns (simple per-user)
 const cdMap = new Map();

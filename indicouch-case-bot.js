@@ -6,7 +6,8 @@ STREAM-READY • Anti-dup • Pricing • Multi-channel inventories with migrati
 - CS2-style odds & wear, price checks (Skinport + optional CSFloat)
 - Fuzzy !price + !price last
 - Cases: CS:GO Weapon Case, Operation Breakout Weapon Case, Fever Case, Glove Case,
-         Prisma 2, Dreams & Nightmares, Fracture
+         Prisma 2, Dreams & Nightmares, Fracture, Gamma 2 Case, eSports 2013 Winter Case,
+         Shattered Web Case, Gamma Case, Operation Bravo Case
 - Inventories are now namespaced per channel:  "<channel>:<username>"
   • Legacy-friendly: reads old keys and migrates them automatically on first touch
   • Mod command `!migrateinv` bulk-migrates all legacy keys for the current channel
@@ -64,7 +65,7 @@ const PUBLIC_URL = process.env.PUBLIC_URL || null; // e.g., https://your-service
 const CONFIG = {
   prefix: process.env.BOT_PREFIX || '!',
   defaultCaseKey: 'Prisma 2 Case',
-  maxOpensPerCommand: 5,         // <= you asked to put it back to 10
+  maxOpensPerCommand: 5,         // your current setting
   stattrakChance: 0.10,           // 10%
   souvenirChance: 0.00,           // regular cases: 0
   wearTiers: [
@@ -419,7 +420,9 @@ const CASES = {
       { weapon: '★ Bayonet', name: 'Tiger Tooth' },
     ],
   },
-   'Gamma 2 Case': {
+
+  // Gamma 2
+  'Gamma 2 Case': {
     Blue: [
       { weapon: 'CZ75-Auto', name: 'Imprint' },
       { weapon: 'Five-SeveN', name: 'Scumbria' },
@@ -446,7 +449,6 @@ const CASES = {
       { weapon: 'FAMAS', name: 'Roll Cage' },
     ],
     Gold: [
-      // Gamma knife finishes (representative set)
       { weapon: '★ Bayonet', name: 'Lore' },
       { weapon: '★ Bayonet', name: 'Gamma Doppler' },
       { weapon: '★ Bayonet', name: 'Autotronic' },
@@ -461,6 +463,7 @@ const CASES = {
     ],
   },
 
+  // eSports 2013 Winter Case
   'eSports 2013 Winter Case': {
     Blue: [
       { weapon: 'P250', name: 'Steel Disruption' },
@@ -483,7 +486,6 @@ const CASES = {
       { weapon: 'M4A4', name: 'X-Ray' },
     ],
     Gold: [
-      // Classic knives (representative set)
       { weapon: '★ Bayonet', name: 'Fade' },
       { weapon: '★ Bayonet', name: 'Case Hardened' },
       { weapon: '★ Bayonet', name: 'Crimson Web' },
@@ -498,6 +500,7 @@ const CASES = {
     ],
   },
 
+  // Shattered Web
   'Shattered Web Case': {
     Blue: [
       { weapon: 'P2000', name: 'Obsidian' },
@@ -527,7 +530,6 @@ const CASES = {
       { weapon: 'MAC-10', name: 'Stalker' },
     ],
     Gold: [
-      // Shattered Web knives (Nomad/Skeleton/Survival/Paracord) — common finishes
       { weapon: '★ Nomad Knife', name: 'Fade' },
       { weapon: '★ Nomad Knife', name: 'Case Hardened' },
       { weapon: '★ Nomad Knife', name: 'Night Stripe' },
@@ -542,7 +544,9 @@ const CASES = {
       { weapon: '★ Paracord Knife', name: 'Fade' },
     ],
   },
-           'Gamma Case': {
+
+  // Gamma Case
+  'Gamma Case': {
     Blue: [
       { weapon: 'Five-SeveN', name: 'Violent Daimyo' },
       { weapon: 'Tec-9', name: 'Ice Cap' },
@@ -569,7 +573,6 @@ const CASES = {
       { weapon: 'Glock-18', name: 'Wasteland Rebel' },
     ],
     Gold: [
-      // Gamma knife set (30 total: 5 knife types × 6 finishes)
       // Bayonet
       { weapon: '★ Bayonet', name: 'Gamma Doppler' },
       { weapon: '★ Bayonet', name: 'Lore' },
@@ -607,95 +610,96 @@ const CASES = {
       { weapon: '★ M9 Bayonet', name: 'Freehand' },
     ],
   },
-         // Operation Bravo Case
-'Operation Bravo Case': {
-  Blue: [
-    { weapon: 'SG 553', name: 'Wave Spray' },
-    { weapon: 'Nova', name: 'Tempest' },
-    { weapon: 'Dual Berettas', name: 'Black Limba' },
-    { weapon: 'Galil AR', name: 'Shattered' },
-    { weapon: 'G3SG1', name: 'Demeter' },
-    { weapon: 'UMP-45', name: 'Bone Pile' },
-  ],
-  Purple: [
-    { weapon: 'M4A1-S', name: 'Bright Water' },
-    { weapon: 'USP-S', name: 'Overgrowth' },
-    { weapon: 'MAC-10', name: 'Graven' },
-    { weapon: 'M4A4', name: 'Zirka' },
-  ],
-  Pink: [
-    { weapon: 'AWP', name: 'Graphite' },
-    { weapon: 'P2000', name: 'Ocean Foam' },
-    { weapon: 'P90', name: 'Emerald Dragon' },
-  ],
-  Red: [
-    { weapon: 'AK-47', name: 'Fire Serpent' },
-    { weapon: 'Desert Eagle', name: 'Golden Koi' },
-  ],
-  Gold: [
-    // classic knife pool
-    // Bayonet
-    { weapon: '★ Bayonet', name: 'Fade' },
-    { weapon: '★ Bayonet', name: 'Case Hardened' },
-    { weapon: '★ Bayonet', name: 'Crimson Web' },
-    { weapon: '★ Bayonet', name: 'Slaughter' },
-    { weapon: '★ Bayonet', name: 'Night' },
-    { weapon: '★ Bayonet', name: 'Blue Steel' },
-    { weapon: '★ Bayonet', name: 'Boreal Forest' },
-    { weapon: '★ Bayonet', name: 'Stained' },
-    { weapon: '★ Bayonet', name: 'Safari Mesh' },
-    { weapon: '★ Bayonet', name: 'Scorched' },
-    { weapon: '★ Bayonet', name: 'Urban Masked' },
-    // Flip
-    { weapon: '★ Flip Knife', name: 'Fade' },
-    { weapon: '★ Flip Knife', name: 'Case Hardened' },
-    { weapon: '★ Flip Knife', name: 'Crimson Web' },
-    { weapon: '★ Flip Knife', name: 'Slaughter' },
-    { weapon: '★ Flip Knife', name: 'Night' },
-    { weapon: '★ Flip Knife', name: 'Blue Steel' },
-    { weapon: '★ Flip Knife', name: 'Boreal Forest' },
-    { weapon: '★ Flip Knife', name: 'Stained' },
-    { weapon: '★ Flip Knife', name: 'Safari Mesh' },
-    { weapon: '★ Flip Knife', name: 'Scorched' },
-    { weapon: '★ Flip Knife', name: 'Urban Masked' },
-    // Gut
-    { weapon: '★ Gut Knife', name: 'Fade' },
-    { weapon: '★ Gut Knife', name: 'Case Hardened' },
-    { weapon: '★ Gut Knife', name: 'Crimson Web' },
-    { weapon: '★ Gut Knife', name: 'Slaughter' },
-    { weapon: '★ Gut Knife', name: 'Night' },
-    { weapon: '★ Gut Knife', name: 'Blue Steel' },
-    { weapon: '★ Gut Knife', name: 'Boreal Forest' },
-    { weapon: '★ Gut Knife', name: 'Stained' },
-    { weapon: '★ Gut Knife', name: 'Safari Mesh' },
-    { weapon: '★ Gut Knife', name: 'Scorched' },
-    { weapon: '★ Gut Knife', name: 'Urban Masked' },
-    // Karambit
-    { weapon: '★ Karambit', name: 'Fade' },
-    { weapon: '★ Karambit', name: 'Case Hardened' },
-    { weapon: '★ Karambit', name: 'Crimson Web' },
-    { weapon: '★ Karambit', name: 'Slaughter' },
-    { weapon: '★ Karambit', name: 'Night' },
-    { weapon: '★ Karambit', name: 'Blue Steel' },
-    { weapon: '★ Karambit', name: 'Boreal Forest' },
-    { weapon: '★ Karambit', name: 'Stained' },
-    { weapon: '★ Karambit', name: 'Safari Mesh' },
-    { weapon: '★ Karambit', name: 'Scorched' },
-    { weapon: '★ Karambit', name: 'Urban Masked' },
-    // M9 Bayonet
-    { weapon: '★ M9 Bayonet', name: 'Fade' },
-    { weapon: '★ M9 Bayonet', name: 'Case Hardened' },
-    { weapon: '★ M9 Bayonet', name: 'Crimson Web' },
-    { weapon: '★ M9 Bayonet', name: 'Slaughter' },
-    { weapon: '★ M9 Bayonet', name: 'Night' },
-    { weapon: '★ M9 Bayonet', name: 'Blue Steel' },
-    { weapon: '★ M9 Bayonet', name: 'Boreal Forest' },
-    { weapon: '★ M9 Bayonet', name: 'Stained' },
-    { weapon: '★ M9 Bayonet', name: 'Safari Mesh' },
-    { weapon: '★ M9 Bayonet', name: 'Scorched' },
-    { weapon: '★ M9 Bayonet', name: 'Urban Masked' },
-  ],
-},
+
+  // Operation Bravo Case
+  'Operation Bravo Case': {
+    Blue: [
+      { weapon: 'SG 553', name: 'Wave Spray' },
+      { weapon: 'Nova', name: 'Tempest' },
+      { weapon: 'Dual Berettas', name: 'Black Limba' },
+      { weapon: 'Galil AR', name: 'Shattered' },
+      { weapon: 'G3SG1', name: 'Demeter' },
+      { weapon: 'UMP-45', name: 'Bone Pile' },
+    ],
+    Purple: [
+      { weapon: 'M4A1-S', name: 'Bright Water' },
+      { weapon: 'USP-S', name: 'Overgrowth' },
+      { weapon: 'MAC-10', name: 'Graven' },
+      { weapon: 'M4A4', name: 'Zirka' },
+    ],
+    Pink: [
+      { weapon: 'AWP', name: 'Graphite' },
+      { weapon: 'P2000', name: 'Ocean Foam' },
+      { weapon: 'P90', name: 'Emerald Dragon' },
+    ],
+    Red: [
+      { weapon: 'AK-47', name: 'Fire Serpent' },
+      { weapon: 'Desert Eagle', name: 'Golden Koi' },
+    ],
+    Gold: [
+      // classic knife pool
+      // Bayonet
+      { weapon: '★ Bayonet', name: 'Fade' },
+      { weapon: '★ Bayonet', name: 'Case Hardened' },
+      { weapon: '★ Bayonet', name: 'Crimson Web' },
+      { weapon: '★ Bayonet', name: 'Slaughter' },
+      { weapon: '★ Bayonet', name: 'Night' },
+      { weapon: '★ Bayonet', name: 'Blue Steel' },
+      { weapon: '★ Bayonet', name: 'Boreal Forest' },
+      { weapon: '★ Bayonet', name: 'Stained' },
+      { weapon: '★ Bayonet', name: 'Safari Mesh' },
+      { weapon: '★ Bayonet', name: 'Scorched' },
+      { weapon: '★ Bayonet', name: 'Urban Masked' },
+      // Flip
+      { weapon: '★ Flip Knife', name: 'Fade' },
+      { weapon: '★ Flip Knife', name: 'Case Hardened' },
+      { weapon: '★ Flip Knife', name: 'Crimson Web' },
+      { weapon: '★ Flip Knife', name: 'Slaughter' },
+      { weapon: '★ Flip Knife', name: 'Night' },
+      { weapon: '★ Flip Knife', name: 'Blue Steel' },
+      { weapon: '★ Flip Knife', name: 'Boreal Forest' },
+      { weapon: '★ Flip Knife', name: 'Stained' },
+      { weapon: '★ Flip Knife', name: 'Safari Mesh' },
+      { weapon: '★ Flip Knife', name: 'Scorched' },
+      { weapon: '★ Flip Knife', name: 'Urban Masked' },
+      // Gut
+      { weapon: '★ Gut Knife', name: 'Fade' },
+      { weapon: '★ Gut Knife', name: 'Case Hardened' },
+      { weapon: '★ Gut Knife', name: 'Crimson Web' },
+      { weapon: '★ Gut Knife', name: 'Slaughter' },
+      { weapon: '★ Gut Knife', name: 'Night' },
+      { weapon: '★ Gut Knife', name: 'Blue Steel' },
+      { weapon: '★ Gut Knife', name: 'Boreal Forest' },
+      { weapon: '★ Gut Knife', name: 'Stained' },
+      { weapon: '★ Gut Knife', name: 'Safari Mesh' },
+      { weapon: '★ Gut Knife', name: 'Scorched' },
+      { weapon: '★ Gut Knife', name: 'Urban Masked' },
+      // Karambit
+      { weapon: '★ Karambit', name: 'Fade' },
+      { weapon: '★ Karambit', name: 'Case Hardened' },
+      { weapon: '★ Karambit', name: 'Crimson Web' },
+      { weapon: '★ Karambit', name: 'Slaughter' },
+      { weapon: '★ Karambit', name: 'Night' },
+      { weapon: '★ Karambit', name: 'Blue Steel' },
+      { weapon: '★ Karambit', name: 'Boreal Forest' },
+      { weapon: '★ Karambit', name: 'Stained' },
+      { weapon: '★ Karambit', name: 'Safari Mesh' },
+      { weapon: '★ Karambit', name: 'Scorched' },
+      { weapon: '★ Karambit', name: 'Urban Masked' },
+      // M9 Bayonet
+      { weapon: '★ M9 Bayonet', name: 'Fade' },
+      { weapon: '★ M9 Bayonet', name: 'Case Hardened' },
+      { weapon: '★ M9 Bayonet', name: 'Crimson Web' },
+      { weapon: '★ M9 Bayonet', name: 'Slaughter' },
+      { weapon: '★ M9 Bayonet', name: 'Night' },
+      { weapon: '★ M9 Bayonet', name: 'Blue Steel' },
+      { weapon: '★ M9 Bayonet', name: 'Boreal Forest' },
+      { weapon: '★ M9 Bayonet', name: 'Stained' },
+      { weapon: '★ M9 Bayonet', name: 'Safari Mesh' },
+      { weapon: '★ M9 Bayonet', name: 'Scorched' },
+      { weapon: '★ M9 Bayonet', name: 'Urban Masked' },
+    ],
+  },
 
 };
 
@@ -957,7 +961,6 @@ async function inventoryValue(userKey) {
     if (typeof v === 'number') sum += v;
   }
   return { totalUSD: +sum.toFixed(2), count: items.length };
- }
 }
 async function leaderboardTop(n = 5, channelName) {
   const inv = getAllInventories();
@@ -1030,7 +1033,7 @@ const HELP_TEXT = [
 // --- Channels parsing (multi-channel support) ---
 const CHANNELS = (process.env.TWITCH_CHANNELS || process.env.TWITCH_CHANNEL || '')
   .split(/[,\s]+/)
-  .map(s => s.trim().replace(/^[@#]/, '').toLowerCase()) // strip @ or # just in case
+  .map(s => s.trim().replace(/^[@#]/, '').toLowerCase())
   .filter(Boolean);
 
 const UNIQUE_CHANNELS = [...new Set(CHANNELS)];
@@ -1047,7 +1050,7 @@ const client = new tmi.Client({
   options: { skipUpdatingEmotesets: true },
   connection: { secure: true, reconnect: true },
   identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
-  channels: UNIQUE_CHANNELS, // <- use the parsed list
+  channels: UNIQUE_CHANNELS,
 });
 
 // Helpful connection logs
@@ -1075,7 +1078,7 @@ client.say = (channel, text) => {
 client.connect().then(() => {
   ensureData(); ensurePriceData();
   console.log(`[dro:${INSTANCE_ID}] data dir = ${DATA_DIR}`);
-  console.log(`[dro:${INSTANCE_ID}] connected to`, process.env.TWITCH_CHANNEL);
+  console.log(`[dro:${INSTANCE_ID}] connected to`, UNIQUE_CHANNELS.map(c => `#${c}`).join(', '));
 }).catch(console.error);
 
 // --- Minimal HTTP health / backup ---
@@ -1100,7 +1103,6 @@ http.createServer((req, res) => {
 }).listen(PORT, () => console.log(`[dro:${INSTANCE_ID}] health on :${PORT}`));
 
 // Smarter resolver: respects numbers (e.g., "Gamma" vs "Gamma 2") and a couple aliases.
-// Minimal + self-contained so we don't touch anything else.
 function resolveCaseKey(input) {
   if (!input) return null;
 
@@ -1108,7 +1110,6 @@ function resolveCaseKey(input) {
   const norm = (s) => String(s).toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
   const q = norm(input);
 
-  // Tiny alias table (kept local to avoid global changes)
   const aliases = {
     'gamma': 'Gamma Case',
     'gamma case': 'Gamma Case',
@@ -1117,7 +1118,7 @@ function resolveCaseKey(input) {
   };
   if (aliases[q] && CASES[aliases[q]]) return aliases[q];
 
-  // 1) Exact match (case-insensitive via normalization)
+  // 1) Exact match
   const exact = keys.find((k) => norm(k) === q);
   if (exact) return exact;
 
@@ -1126,7 +1127,6 @@ function resolveCaseKey(input) {
   const stop = new Set(['case', 'weapon', 'operation', 'csgo', 'cs:go']);
   const qTokens = q.split(' ').filter((t) => t && !stop.has(t));
 
-  // Prefer names that share the same "has digits" property as the query
   let candidates = keys.filter((k) => {
     const nk = norm(k);
     const kHasDigit = /\d/.test(nk);
@@ -1134,19 +1134,17 @@ function resolveCaseKey(input) {
     return qTokens.every((t) => nk.includes(t));
   });
 
-  // 3) Fallback: startsWith, still guarding against digit mismatch
   if (candidates.length === 0) {
     candidates = keys.filter((k) => {
       const nk = norm(k);
       if (!nk.startsWith(q)) return false;
-      if (!qHasDigit && /\d/.test(nk)) return false; // "gamma" should not hit "gamma 2"
+      if (!qHasDigit && /\d/.test(nk)) return false;
       return true;
     });
   }
 
   if (candidates.length === 0) return null;
 
-  // 4) Prefer the shortest case name (e.g., "Gamma Case" over "Gamma 2 Case")
   candidates.sort((a, b) => a.length - b.length || a.localeCompare(b));
   return candidates[0];
 }
@@ -1179,7 +1177,7 @@ client.on('message', async (channel, tags, message, self) => {
   switch (cmd) {
     case 'dro':
     case 'drobot': {
-      const intro = `Yo, I’m Dro_bot_ v0.0.5 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
+      const intro = `Yo, I’m Dro_bot_ v0.0.7.1 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
       client.say(channel, intro);
       break;
     }
@@ -1205,93 +1203,92 @@ client.on('message', async (channel, tags, message, self) => {
       break;
     }
 
-case 'open': {
-  // !open <case words...> [xN or N]
-  let count = 1;
-  // accept quantity as last token: either "xN" or just "N"
-  let qtyIdx = -1; let qtyMatch = null;
-  for (let i = args.length - 1; i >= 0; i--) {
-    const m = /^x?([0-9]+)$/i.exec(args[i]);
-    if (m) { qtyIdx = i; qtyMatch = m; break; }
-  }
-  if (qtyIdx >= 0) {
-    count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(qtyMatch[1], 10)));
-    args.splice(qtyIdx, 1);
-  }
+    case 'open': {
+      // !open <case words...> [xN or N]
+      let count = 1;
+      // accept quantity as last token: either "xN" or just "N"
+      let qtyIdx = -1; let qtyMatch = null;
+      for (let i = args.length - 1; i >= 0; i--) {
+        const m = /^x?([0-9]+)$/i.exec(args[i]);
+        if (m) { qtyIdx = i; qtyMatch = m; break; }
+      }
+      if (qtyIdx >= 0) {
+        count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(qtyMatch[1], 10)));
+        args.splice(qtyIdx, 1);
+      }
 
-  const caseInput = args.join(' ');
-  const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(user);
-  if (!caseKey) { client.say(channel, `@${user} pick a case with !cases or set one with !setcase <case>.`); break; }
+      const caseInput = args.join(' ');
+      const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(display);
+      if (!caseKey) { client.say(channel, `@${display} pick a case with !cases or set one with !setcase <case>.`); break; }
 
-  // Pull drops
-  const results = [];
-  for (let i = 0; i < count; i++) {
-    const drop = openOne(caseKey);
-    results.push(drop);
-    addToInventory(user, drop);
-    pushStats(drop);
-  }
+      // Pull drops
+      const results = [];
+      for (let i = 0; i < count; i++) {
+        const drop = openOne(caseKey);
+        results.push(drop);
+        addToInventory(selfKey, drop);  // namespaced inventory
+        pushStats(drop);
+      }
 
-  // Ensure prices for display
-  try {
-    for (const d of results) { await ensurePriceOnDrop(d); }
-  } catch {}
+      // Ensure prices for display
+      try {
+        for (const d of results) { await ensurePriceOnDrop(d); }
+      } catch {}
 
-  // Sort for display: rarity (Gold > Red > Pink > Purple > Blue), then price desc, then float asc
-  const rarityWeight = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
-  const sorted = results.slice().sort((a, b) => {
-    const rw = (rarityWeight[b.rarity] || 0) - (rarityWeight[a.rarity] || 0);
-    if (rw !== 0) return rw;
-    const pa = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
-    const pb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
-    if (pb !== pa) return pb - pa;
-    // tie-breaker: lower float is "nicer"
-    return (a.float || 1) - (b.float || 1);
-  });
+      // Sort for display: rarity (Gold > Red > Pink > Purple > Blue), then price desc, then float asc
+      const rarityWeight = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
+      const sorted = results.slice().sort((a, b) => {
+        const rw = (rarityWeight[b.rarity] || 0) - (rarityWeight[a.rarity] || 0);
+        if (rw !== 0) return rw;
+        const pa = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
+        const pb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
+        if (pb !== pa) return pb - pa;
+        return (a.float || 1) - (b.float || 1);
+      });
 
-  // Filter rule for chat noise: hide Blue items under $9.99 from the *chat output only*
-  const NOTABLE_THRESHOLD = 9.99;
-  const isVisibleInChat = (d) => !(d.rarity === 'Blue' && (d.priceUSD ?? 0) < NOTABLE_THRESHOLD);
+      // Filter rule for chat noise: hide Blue items under $9.99 from the *chat output only*
+      const NOTABLE_THRESHOLD = 9.99;
+      const isVisibleInChat = (d) => !(d.rarity === 'Blue' && (d.priceUSD ?? 0) < NOTABLE_THRESHOLD);
 
-  if (count <= 5) {
-    const visibles = sorted.filter(isVisibleInChat);
-    if (visibles.length === 0) {
-      client.say(channel, `@${user} opened ${count}x ${caseKey}: no notable drops (>$${NOTABLE_THRESHOLD.toFixed(2)}) — check !inv or !invlist to see everything.`);
-    } else {
-      const lines = visibles.map(formatDrop).join('  |  ');
-      client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
+      if (count <= 5) {
+        const visibles = sorted.filter(isVisibleInChat);
+        if (visibles.length === 0) {
+          client.say(channel, `@${display} opened ${count}x ${caseKey}: no notable drops (>$${NOTABLE_THRESHOLD.toFixed(2)}) — check !inv or !invlist to see everything.`);
+        } else {
+          const lines = visibles.map(formatDrop).join('  |  ');
+          client.say(channel, `@${display} opened ${count}x ${caseKey}: ${lines}`);
+        }
+        break;
+      }
+
+      // For >5, show top 5 *visible* items, then summarize the rest
+      const headVis = sorted.filter(isVisibleInChat).slice(0, 5);
+      const headText = headVis.length ? headVis.map(formatDrop).join('  |  ') : `no notable drops (>$${NOTABLE_THRESHOLD.toFixed(2)})`;
+
+      // Tail = everything else (for the summary + highlights)
+      const shownSet = new Set(headVis);
+      const tail = sorted.filter(d => !shownSet.has(d));
+
+      let tailValue = 0;
+      for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
+
+      // Highlights: Gold/Red count, and very low floats
+      const reds = tail.filter(d => d.rarity === 'Red').length;
+      const golds = tail.filter(d => d.rarity === 'Gold').length;
+      const lowFloat = tail.filter(d => (d.float ?? 1) <= 0.05).length;
+
+      const highlights = [
+        golds ? `✨x${golds}` : null,
+        reds ? `🔴x${reds}` : null,
+        lowFloat ? `⬇️x${lowFloat}` : null,
+      ].filter(Boolean).join(' ');
+
+      const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
+      const hl = highlights ? ` Highlights: ${highlights}` : '';
+
+      client.say(channel, `@${display} opened ${count}x ${caseKey}: ${headText}  |  ${more}.${hl}`);
+      break;
     }
-    break;
-  }
-
-  // For >5, show top 5 *visible* items, then summarize the rest
-  const headVis = sorted.filter(isVisibleInChat).slice(0, 5);
-  const headText = headVis.length ? headVis.map(formatDrop).join('  |  ') : `no notable drops (>$${NOTABLE_THRESHOLD.toFixed(2)})`;
-
-  // Tail = everything else (for the summary + highlights)
-  const shownSet = new Set(headVis);
-  const tail = sorted.filter(d => !shownSet.has(d));
-
-  let tailValue = 0;
-  for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
-
-  // Highlights: Gold/Red count, and very low floats
-  const reds = tail.filter(d => d.rarity === 'Red').length;
-  const golds = tail.filter(d => d.rarity === 'Gold').length;
-  const lowFloat = tail.filter(d => (d.float ?? 1) <= 0.05).length;
-
-  const highlights = [
-    golds ? `✨x${golds}` : null,
-    reds ? `🔴x${reds}` : null,
-    lowFloat ? `⬇️x${lowFloat}` : null,
-  ].filter(Boolean).join(' ');
-
-  const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
-  const hl = highlights ? ` Highlights: ${highlights}` : '';
-
-  client.say(channel, `@${user} opened ${count}x ${caseKey}: ${headText}  |  ${more}.${hl}`);
-  break;
-   }
 
     case 'inv': {
       const target = (args[0]?.replace('@','') || display).toLowerCase();

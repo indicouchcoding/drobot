@@ -946,8 +946,42 @@ function _bestSkinportKeyForQuery(query) { const map = PriceService._skinport &&
 async function priceLookupFlexible(input) { let out=await priceForMarketHash(input); if (out && out.usd!=null) return { ...out, resolved: input }; const candidate=_bestSkinportKeyForQuery(input); if (candidate) { out=await priceForMarketHash(candidate); if (out && out.usd!=null) return { ...out, resolved: candidate }; } return { usd: null, resolved: input }; }
 
 // ----------------- Values & Leaderboard -----------------
-async function ensurePriceOnDrop(drop) { if (typeof drop.priceUSD === 'number') return drop.priceUSD; try { const p=await PriceService.priceForDrop(drop); if (p && typeof p.usd==='number') { drop.priceUSD=p.usd; return drop.priceUSD; } } catch {} return null; }
-async function inventoryValue(userKey) { const items=getInventory(userKey); let sum=0; for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } return { totalUSD:+sum.toFixed(2), count: items.length }; }
+async function ensurePriceOnDrop(drop) {
+  if (typeof drop.priceUSD === 'number') return drop.priceUSD;
+  try {
+    const p = await PriceService.priceForDrop(drop);
+    if (p && typeof p.usd === 'number') { drop.priceUSD = p.usd; return drop.priceUSD; }
+  } catch {}
+  return null;
+}
+
+// worth calc that ignores Blue (Mil-Spec)
+async function inventoryValue(userKey) {
+  const all = getInventory(userKey) || [];
+  const items = all.filter(d => d.rarity !== 'Blue'); // exclude Blues from valuation
+  if (!items.length) return { totalUSD: 0, countValued: 0, countAll: all.length };
+
+  // de-dupe by market hash so we price each distinct item once
+  const byHash = new Map();
+  for (const d of items) {
+    const mh = marketNameFromDrop(d);
+    if (!byHash.has(mh)) byHash.set(mh, []);
+    byHash.get(mh).push(d);
+  }
+
+  let sum = 0;
+  for (const [mh, drops] of byHash.entries()) {
+    try {
+      const p = await priceForMarketHash(mh);
+      if (p && typeof p.usd === 'number') {
+        for (const d of drops) d.priceUSD = p.usd; // cache on each drop
+        sum += p.usd * drops.length;
+      }
+    } catch {}
+  }
+
+  return { totalUSD: +sum.toFixed(2), countValued: items.length, countAll: all.length };
+}
 
 async function leaderboardTop(n = 5, channelName) {
   const inv = getAllInventories();
@@ -1297,22 +1331,7 @@ results.sort((a, b) => {
       break;
     }
 
-    case 'worth': {
-      const rawTarget = (args[0]?.replace('@','') || display).toLowerCase();
-      const isSelf = rawTarget === display;
-      const targetKey = nsKey(channel, rawTarget);
-      const { totalUSD, count } = await inventoryValue(targetKey);
-      if (count === 0) {
-        if (isSelf) client.say(channel, `@${display} you have an empty inventory.`);
-        else client.say(channel, `@${display} @${rawTarget} has an empty inventory.`);
-        break;
-      }
-      const msg = isSelf
-        ? `@${display} inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`
-        : `@${display} @${rawTarget}'s inventory: ${count} items • ~$${totalUSD.toFixed(2)} USD`;
-      client.say(channel, msg);
-      break;
-    }
+case 'worth':
 
     case 'price': {
       const q = args.join(' ').trim();

@@ -947,8 +947,18 @@ async function priceLookupFlexible(input) { let out=await priceForMarketHash(inp
 
 // ----------------- Values & Leaderboard -----------------
 async function ensurePriceOnDrop(drop) { if (typeof drop.priceUSD === 'number') return drop.priceUSD; try { const p=await PriceService.priceForDrop(drop); if (p && typeof p.usd==='number') { drop.priceUSD=p.usd; return drop.priceUSD; } } catch {} return null; }
-async function inventoryValue(userKey) { const items=getInventory(userKey); let sum=0; for (const d of items) { const v=await ensurePriceOnDrop(d); if (typeof v==='number') sum+=v; } return { totalUSD:+sum.toFixed(2), count: items.length }; }
-
+async function inventoryValue(userKey) {
+  const items = getInventory(userKey);
+  let sum = 0;
+  for (const d of items) {
+    // Ignore Blues in worth total
+    if (d?.rarity === 'Blue') continue;
+    const v = await ensurePriceOnDrop(d);
+    if (typeof v === 'number') sum += v;
+  }
+  return { totalUSD: +sum.toFixed(2), count: items.length };
+ }
+}
 async function leaderboardTop(n = 5, channelName) {
   const inv = getAllInventories();
   const rows = [];
@@ -1195,64 +1205,93 @@ client.on('message', async (channel, tags, message, self) => {
       break;
     }
 
-    case 'open': {
-      // !open <case words...> [xN|N]
-      let count = 1;
-      let qtyIdx = -1; let qtyMatch = null;
-      for (let i = args.length - 1; i >= 0; i--) {
-        const m = /^x?([0-9]+)$/i.exec(args[i]);
-        if (m) { qtyIdx = i; qtyMatch = m; break; }
-      }
-      if (qtyIdx >= 0) {
-        count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(qtyMatch[1], 10)));
-        args.splice(qtyIdx, 1);
-      }
-      const caseInput = args.join(' ');
-      const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(display);
-      if (!caseKey) { client.say(channel, `@${display} pick a case with !cases or set one with !setcase <case>.`); break; }
+case 'open': {
+  // !open <case words...> [xN or N]
+  let count = 1;
+  // accept quantity as last token: either "xN" or just "N"
+  let qtyIdx = -1; let qtyMatch = null;
+  for (let i = args.length - 1; i >= 0; i--) {
+    const m = /^x?([0-9]+)$/i.exec(args[i]);
+    if (m) { qtyIdx = i; qtyMatch = m; break; }
+  }
+  if (qtyIdx >= 0) {
+    count = Math.max(1, Math.min(CONFIG.maxOpensPerCommand, parseInt(qtyMatch[1], 10)));
+    args.splice(qtyIdx, 1);
+  }
 
-      const results = [];
-      for (let i = 0; i < count; i++) {
-        const drop = openOne(caseKey);
-        results.push(drop);
-        addToInventory(selfKey, drop);
-        pushStats(drop);
-      }
-      try { for (const d of results) { await ensurePriceOnDrop(d); } } catch {}
+  const caseInput = args.join(' ');
+  const caseKey = caseInput ? resolveCaseKey(caseInput) : getDefaultCase(user);
+  if (!caseKey) { client.say(channel, `@${user} pick a case with !cases or set one with !setcase <case>.`); break; }
 
-// --- sort rarest + priciest first (no other changes) ---
-const __RARITY_SCORE = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
-results.sort((a, b) => {
-  // rarity first
-  const rd = (__RARITY_SCORE[b.rarity] || 0) - (__RARITY_SCORE[a.rarity] || 0);
-  if (rd) return rd;
-  // then price (higher first; unknowns last)
-  const pa = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
-  const pb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
-  if (pb !== pa) return pb - pa;
-  // then StatTrak
-  if (a.stattrak !== b.stattrak) return b.stattrak ? 1 : -1;
-  // finally lower float (better wear) first
-  return (a.float ?? 1) - (b.float ?? 1);
-});
+  // Pull drops
+  const results = [];
+  for (let i = 0; i < count; i++) {
+    const drop = openOne(caseKey);
+    results.push(drop);
+    addToInventory(user, drop);
+    pushStats(drop);
+  }
+
+  // Ensure prices for display
+  try {
+    for (const d of results) { await ensurePriceOnDrop(d); }
+  } catch {}
+
+  // Sort for display: rarity (Gold > Red > Pink > Purple > Blue), then price desc, then float asc
+  const rarityWeight = { Gold: 5, Red: 4, Pink: 3, Purple: 2, Blue: 1 };
+  const sorted = results.slice().sort((a, b) => {
+    const rw = (rarityWeight[b.rarity] || 0) - (rarityWeight[a.rarity] || 0);
+    if (rw !== 0) return rw;
+    const pa = (typeof a.priceUSD === 'number') ? a.priceUSD : -1;
+    const pb = (typeof b.priceUSD === 'number') ? b.priceUSD : -1;
+    if (pb !== pa) return pb - pa;
+    // tie-breaker: lower float is "nicer"
+    return (a.float || 1) - (b.float || 1);
+  });
+
+  // Filter rule for chat noise: hide Blue items under $9.99 from the *chat output only*
+  const NOTABLE_THRESHOLD = 9.99;
+  const isVisibleInChat = (d) => !(d.rarity === 'Blue' && (d.priceUSD ?? 0) < NOTABLE_THRESHOLD);
 
   if (count <= 5) {
-        const lines = results.map(formatDrop).join('  |  ');
-        client.say(channel, `@${display} opened ${count}x ${caseKey}: ${lines}`);
-      } else {
-        const head = results.slice(0, 5).map(formatDrop).join('  |  ');
-        const tail = results.slice(5);
-        let tailValue = 0; for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
-        const reds = tail.filter(d => d.rarity === 'Red').length;
-        const golds = tail.filter(d => d.rarity === 'Gold').length;
-        const lowFloat = tail.filter(d => d.float <= 0.05).length; // super low floats
-        const highlights = [golds?`✨x${golds}`:null, reds?`🔴x${reds}`:null, lowFloat?`⬇️x${lowFloat}`:null].filter(Boolean).join(' ');
-        const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
-        const hl = highlights ? ` Highlights: ${highlights}` : '';
-        client.say(channel, `@${display} opened ${count}x ${caseKey}: ${head}  |  ${more}.${hl}`);
-      }
-      break;
+    const visibles = sorted.filter(isVisibleInChat);
+    if (visibles.length === 0) {
+      client.say(channel, `@${user} opened ${count}x ${caseKey}: no notable drops (>$${NOTABLE_THRESHOLD.toFixed(2)}) — check !inv or !invlist to see everything.`);
+    } else {
+      const lines = visibles.map(formatDrop).join('  |  ');
+      client.say(channel, `@${user} opened ${count}x ${caseKey}: ${lines}`);
     }
+    break;
+  }
+
+  // For >5, show top 5 *visible* items, then summarize the rest
+  const headVis = sorted.filter(isVisibleInChat).slice(0, 5);
+  const headText = headVis.length ? headVis.map(formatDrop).join('  |  ') : `no notable drops (>$${NOTABLE_THRESHOLD.toFixed(2)})`;
+
+  // Tail = everything else (for the summary + highlights)
+  const shownSet = new Set(headVis);
+  const tail = sorted.filter(d => !shownSet.has(d));
+
+  let tailValue = 0;
+  for (const d of tail) if (typeof d.priceUSD === 'number') tailValue += d.priceUSD;
+
+  // Highlights: Gold/Red count, and very low floats
+  const reds = tail.filter(d => d.rarity === 'Red').length;
+  const golds = tail.filter(d => d.rarity === 'Gold').length;
+  const lowFloat = tail.filter(d => (d.float ?? 1) <= 0.05).length;
+
+  const highlights = [
+    golds ? `✨x${golds}` : null,
+    reds ? `🔴x${reds}` : null,
+    lowFloat ? `⬇️x${lowFloat}` : null,
+  ].filter(Boolean).join(' ');
+
+  const more = `… +${tail.length} more (~$${tailValue.toFixed(2)})`;
+  const hl = highlights ? ` Highlights: ${highlights}` : '';
+
+  client.say(channel, `@${user} opened ${count}x ${caseKey}: ${headText}  |  ${more}.${hl}`);
+  break;
+   }
 
     case 'inv': {
       const target = (args[0]?.replace('@','') || display).toLowerCase();

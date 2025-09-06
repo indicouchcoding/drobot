@@ -1307,13 +1307,16 @@ case 'invlist': {
   // !invlist <rarity> [@user]
   const rarityArg = (args[0] || '').toLowerCase();
   const rarityKey = normalizeRarity(rarityArg);
-  if (!rarityKey) { client.say(channel, `@${display} usage: !invlist <gold|red|pink|purple> [@user]`); break; }
+  if (!rarityKey) { 
+    client.say(channel, `@${display} usage: !invlist <gold|red> [@user]`); 
+    break; 
+  }
 
-  // block Blue lists to prevent spam
-  if (rarityKey === 'Blue') {
-    client.say(channel, `@${display} Blue invlist is disabled to reduce chat spam. Use !inv for a summary or pick another rarity.`);
+  // block Blue, Purple, Pink lists to prevent spam
+  if (rarityKey === 'Blue' || rarityKey === 'Purple' || rarityKey === 'Pink') {
+    client.say(channel, `@${display} ${rarityKey} invlist is disabled to reduce chat spam. Use !inv for a summary or pick Red/Gold.`);
     break;
-     }
+  }
 
       let targetUser = display;
       if (args[1]) {

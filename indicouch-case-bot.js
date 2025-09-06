@@ -1303,11 +1303,18 @@ client.on('message', async (channel, tags, message, self) => {
       break;
     }
 
-    case 'invlist': {
-      // !invlist <rarity> [@user]
-      const rarityArg = (args[0] || '').toLowerCase();
-      const rarityKey = normalizeRarity(rarityArg);
-      if (!rarityKey) { client.say(channel, `@${display} usage: !invlist <gold|red|pink|purple|blue> [@user]`); break; }
+case 'invlist': {
+  // !invlist <rarity> [@user]
+  const rarityArg = (args[0] || '').toLowerCase();
+  const rarityKey = normalizeRarity(rarityArg);
+  if (!rarityKey) { client.say(channel, `@${display} usage: !invlist <gold|red|pink|purple> [@user]`); break; }
+
+  // block Blue lists to prevent spam
+  if (rarityKey === 'Blue') {
+    client.say(channel, `@${display} Blue invlist is disabled to reduce chat spam. Use !inv for a summary or pick another rarity.`);
+    break;
+     }
+
       let targetUser = display;
       if (args[1]) {
         const maybe = args[1].replace('@','').toLowerCase();

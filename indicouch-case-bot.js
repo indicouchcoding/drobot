@@ -26,7 +26,6 @@ import path from 'path';
 import tmi from 'tmi.js';
 import dotenv from 'dotenv';
 import http from 'http';
-import { getCurrentSong, fmtTime } from './lib/spotify.js';
 dotenv.config();
 
 // ----------------- Instance + Anti-dup -----------------
@@ -1086,50 +1085,6 @@ client.connect().then(() => {
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   try {
-    if (req.url && req.url.startsWith('/songtest')) {
-  getCurrentSong().then(now => {
-    let text = 'Spotify not linked';
-    if (now && now.status !== 'missing_refresh') {
-      if (now.status === 'nothing') { text = 'No track playing'; }
-      else if (now.type === 'episode') { text = `${now.isPlaying ? '▶️' : '⏸️'} Podcast: ${now.title} — ${now.show}`; }
-      else {
-        const progress = fmtTime(now.progressMs);
-        const total = fmtTime(now.durationMs);
-        text = `${now.isPlaying ? '▶️' : '⏸️'} ${now.artists} — ${now.title} [${progress}/${total}]`;
-      }
-    }
-    res.writeHead(200, {'Content-Type':'text/plain'}).end(text);
-  }).catch(e => {
-    console.error('[songtest] error', e);
-    res.writeHead(500, {'Content-Type':'text/plain'}).end('Error contacting Spotify');
-  });
-  return;
-}
-      if (now.status === 'nothing') { res.writeHead(200, {'Content-Type':'text/plain'}).end('No track playing'); return; }
-      if (now.type === 'episode') { res.writeHead(200, {'Content-Type':'text/plain'}).end(`${now.isPlaying ? '▶️' : '⏸️'} Podcast: ${now.title} — ${now.show}`); return; }
-      const progress = fmtTime(now.progressMs);
-      const total = fmtTime(now.durationMs);
-      res.writeHead(200, {'Content-Type':'text/plain'}).end(`${now.isPlaying ? '▶️' : '⏸️'} ${now.artists} — ${now.title} [${progress}/${total}]`);
-    }).catch(e => {
-      console.error('[songtest] error', e);
-      res.writeHead(500, {'Content-Type':'text/plain'}).end('Error contacting Spotify');
-    });
-  } catch (e) {
-    console.error('[songtest] error', e);
-    res.writeHead(500, {'Content-Type':'text/plain'}).end('Error contacting Spotify');
-  }
-  return;
-}
-
-      if (now.status === 'nothing') { res.writeHead(200, {'Content-Type':'text/plain'}).end('No track playing'); return; }
-      if (now.type === 'episode') { res.writeHead(200, {'Content-Type':'text/plain'}).end(`${now.isPlaying ? '▶️' : '⏸️'} Podcast: ${now.title} — ${now.show}`); return; }
-      const progress = fmtTime(now.progressMs);
-      const total = fmtTime(now.durationMs);
-      res.writeHead(200, {'Content-Type':'text/plain'}).end(`${now.isPlaying ? '▶️' : '⏸️'} ${now.artists} — ${now.title} [${progress}/${total}]`);
-      return;
-    }
-  } catch (e) { console.error('[songtest] error', e); }
-  try {
     const u = new URL(req.url, 'http://localhost');
     if (u.pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
     if (u.pathname === '/backup') {
@@ -1234,33 +1189,6 @@ client.on('message', async (channel, tags, message, self) => {
     case 'cases':
       client.say(channel, `Available cases: ${Object.keys(CASES).join(' | ')}`);
       break;
-    case 'song': {
-      try {
-        const now = await getCurrentSong();
-        if (now.status === "missing_refresh") {
-          client.say(channel, "Spotify not linked yet. (Owner: add SPOTIFY_REFRESH_TOKEN)");
-          break;
-        }
-        if (now.status === "nothing") {
-          client.say(channel, "No track playing right now.");
-          break;
-        }
-        if (now.type === "episode") {
-          client.say(channel, `${now.isPlaying ? "▶️" : "⏸️"} Podcast: ${now.title} — ${now.show} ${now.url ? `(${now.url})` : ""}`);
-          break;
-        }
-        const progress = fmtTime(now.progressMs);
-        const total = fmtTime(now.durationMs);
-        client.say(
-          channel,
-          `${now.isPlaying ? "▶️" : "⏸️"} ${now.artists} — ${now.title} ${now.url ? `(${now.url})` : ""} [${progress}/${total}]`
-        );
-      } catch (e) {
-        console.error(e);
-        client.say(channel, "Couldn’t reach Spotify right now.");
-      }
-      break;
-    }
 
     case 'mycase':
       client.say(channel, `@${display} your default case is: ${getDefaultCase(display)}`);

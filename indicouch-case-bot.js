@@ -1087,9 +1087,24 @@ const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   try {
     if (req.url && req.url.startsWith('/songtest')) {
-  try {
-    getCurrentSong().then(now => {
-      if (!now || now.status === 'missing_refresh') { res.writeHead(200, {'Content-Type':'text/plain'}).end('Spotify not linked'); return; }
+  getCurrentSong().then(now => {
+    let text = 'Spotify not linked';
+    if (now && now.status !== 'missing_refresh') {
+      if (now.status === 'nothing') { text = 'No track playing'; }
+      else if (now.type === 'episode') { text = `${now.isPlaying ? '▶️' : '⏸️'} Podcast: ${now.title} — ${now.show}`; }
+      else {
+        const progress = fmtTime(now.progressMs);
+        const total = fmtTime(now.durationMs);
+        text = `${now.isPlaying ? '▶️' : '⏸️'} ${now.artists} — ${now.title} [${progress}/${total}]`;
+      }
+    }
+    res.writeHead(200, {'Content-Type':'text/plain'}).end(text);
+  }).catch(e => {
+    console.error('[songtest] error', e);
+    res.writeHead(500, {'Content-Type':'text/plain'}).end('Error contacting Spotify');
+  });
+  return;
+}
       if (now.status === 'nothing') { res.writeHead(200, {'Content-Type':'text/plain'}).end('No track playing'); return; }
       if (now.type === 'episode') { res.writeHead(200, {'Content-Type':'text/plain'}).end(`${now.isPlaying ? '▶️' : '⏸️'} Podcast: ${now.title} — ${now.show}`); return; }
       const progress = fmtTime(now.progressMs);

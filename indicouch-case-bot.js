@@ -1086,6 +1086,18 @@ client.connect().then(() => {
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   try {
+    if (req.url && req.url.startsWith('/songtest')) {
+      const now = await getCurrentSong();
+      if (!now || now.status === 'missing_refresh') { res.writeHead(200, {'Content-Type':'text/plain'}).end('Spotify not linked'); return; }
+      if (now.status === 'nothing') { res.writeHead(200, {'Content-Type':'text/plain'}).end('No track playing'); return; }
+      if (now.type === 'episode') { res.writeHead(200, {'Content-Type':'text/plain'}).end(`${now.isPlaying ? '▶️' : '⏸️'} Podcast: ${now.title} — ${now.show}`); return; }
+      const progress = fmtTime(now.progressMs);
+      const total = fmtTime(now.durationMs);
+      res.writeHead(200, {'Content-Type':'text/plain'}).end(`${now.isPlaying ? '▶️' : '⏸️'} ${now.artists} — ${now.title} [${progress}/${total}]`);
+      return;
+    }
+  } catch (e) { console.error('[songtest] error', e); }
+  try {
     const u = new URL(req.url, 'http://localhost');
     if (u.pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
     if (u.pathname === '/backup') {
@@ -1191,10 +1203,8 @@ client.on('message', async (channel, tags, message, self) => {
       client.say(channel, `Available cases: ${Object.keys(CASES).join(' | ')}`);
       break;
     case 'song': {
-      console.log('[song] command received');
       try {
         const now = await getCurrentSong();
-        console.log('[song] getCurrentSong status:', now && now.status, now && now.type);
         if (now.status === "missing_refresh") {
           client.say(channel, "Spotify not linked yet. (Owner: add SPOTIFY_REFRESH_TOKEN)");
           break;

@@ -1029,6 +1029,7 @@ const HELP_TEXT = [
   `!mycase — show your default case`,
   `!dro | !drobot — about message`,
   `!migrateinv — (mods) migrate legacy inventories for this channel`,
+  `!song — checks current song playing`,
 ].join(' | ');
 
 // --- Channels parsing (multi-channel support) ---
@@ -1178,7 +1179,7 @@ client.on('message', async (channel, tags, message, self) => {
   switch (cmd) {
     case 'dro':
     case 'drobot': {
-      const intro = `Yo, I’m Dro_bot_ v0.0.7.1 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
+      const intro = `Yo, I’m Dro_bot_ v0.0.8.2 — your CS2 case-opening companion. Open cases with 1:1 CS2-style odds & wear, save your drops, check live prices (Skinport + CSFloat), and climb the value leaderboard. Try: !open <case>, !price last, !inv, !worth, !top, !cases . Pure sim, no real items and most importantly, completely free! GLHF ✨`;
       client.say(channel, intro);
       break;
     }

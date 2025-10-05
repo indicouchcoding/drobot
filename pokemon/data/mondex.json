@@ -1,0 +1,78 @@
+{
+  "monsters": [
+    {
+      "id": 1,
+      "name": "Sparkit",
+      "rarity": "Common",
+      "catchRate": 200,
+      "hint": "\u26a1 small feline silhouette"
+    },
+    {
+      "id": 2,
+      "name": "Buddro",
+      "rarity": "Common",
+      "catchRate": 190,
+      "hint": "\ud83c\udf3f sleepy sprout with hoodie"
+    },
+    {
+      "id": 3,
+      "name": "Aquaphin",
+      "rarity": "Uncommon",
+      "catchRate": 160,
+      "hint": "\ud83d\udca7 tiny fin peeking"
+    },
+    {
+      "id": 4,
+      "name": "Emberowl",
+      "rarity": "Uncommon",
+      "catchRate": 140,
+      "hint": "\ud83d\udd25 glowing-eyed owl"
+    },
+    {
+      "id": 5,
+      "name": "Geodillo",
+      "rarity": "Rare",
+      "catchRate": 90,
+      "hint": "\ud83e\udea8 rolled-up shell"
+    },
+    {
+      "id": 6,
+      "name": "Phantomink",
+      "rarity": "Rare",
+      "catchRate": 75,
+      "hint": "\ud83d\udda4 inky wisp, two eyes"
+    },
+    {
+      "id": 7,
+      "name": "Nebulox",
+      "rarity": "Epic",
+      "catchRate": 45,
+      "hint": "\ud83c\udf0c star-speck cloud"
+    },
+    {
+      "id": 8,
+      "name": "Chronorchid",
+      "rarity": "Legendary",
+      "catchRate": 25,
+      "hint": "\u23f3 blooming clock petals"
+    }
+  ],
+  "rarityWeights": {
+    "Common": 6500,
+    "Uncommon": 2600,
+    "Rare": 700,
+    "Epic": 180,
+    "Legendary": 20
+  },
+  "balls": {
+    "pokeball": {
+      "bonus": 1.0
+    },
+    "greatball": {
+      "bonus": 1.5
+    },
+    "ultraball": {
+      "bonus": 2.0
+    }
+  }
+}

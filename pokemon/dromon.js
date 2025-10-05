@@ -4,36 +4,17 @@ import tmi from 'tmi.js';
 import fs from 'fs';
 import path from 'path';
 
-// -------- File paths (robust) --------
-// Resolve relative to this file (pokemon/dromon.js), not process CWD
+/** =========================
+ *  Paths & JSON helpers
+ *  ========================= */
 const HERE = path.dirname(new URL(import.meta.url).pathname);
-
-// Writable data dir (can override via env)
-const DROMON_DATA_DIR =
-  process.env.DROMON_DATA_DIR ||          // e.g., /opt/render/project/src/pokemon/data  or  /data/dromon
-  path.join(HERE, 'data');                // default: pokemon/data next to this file
-
+const DROMON_DATA_DIR = process.env.DROMON_DATA_DIR || path.join(HERE, 'data');
 if (!fs.existsSync(DROMON_DATA_DIR)) fs.mkdirSync(DROMON_DATA_DIR, { recursive: true });
 
 const USERS_FILE = path.join(DROMON_DATA_DIR, 'users.json');
 const WORLD_FILE = path.join(DROMON_DATA_DIR, 'world.json');
+const DEX_FILE = process.env.DROMON_DEX_FILE || path.join(HERE, 'data', 'mondex.json');
 
-// Dex file: allow explicit override, else use repo copy next to the script
-const DEX_FILE =
-  process.env.DROMON_DEX_FILE ||          // e.g., /opt/render/project/src/pokemon/data/mondex.json
-  path.join(HERE, 'data', 'mondex.json');
-
-// -------- Env --------
-const PREFIX = process.env.PREFIX || '!';
-const CHANNELS = (process.env.TWITCH_CHANNELS || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
-const SPAWN_INTERVAL_SEC = Number(process.env.SPAWN_INTERVAL_SEC || 300);
-const SPAWN_DESPAWN_SEC = Number(process.env.SPAWN_DESPAWN_SEC || 180);
-let SHINY_RATE_DENOM = Number(process.env.SHINY_RATE_DENOM || 1024);
-
-// -------- Load/save helpers --------
 function loadJson(filePath, fallback) {
   try {
     if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
@@ -51,272 +32,385 @@ function saveJson(filePath, obj) {
   }
 }
 
-// -------- Load data --------
 let users = loadJson(USERS_FILE, {});
-let world = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });
-const dex = loadJson(DEX_FILE, { monsters: [], rarityWeights: {}, balls: {} });
+let world  = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });
 
-// Helpful log so you can confirm on Render
+// revive Set in world.current.caughtBy after a reload
+function reviveWorld(w) {
+  if (!w) return { current: null, lastSpawnTs: 0 };
+  const out = { ...w };
+  if (out.current) {
+    const cur = { ...out.current };
+    if (Array.isArray(cur.caughtBy)) cur.caughtBy = new Set(cur.caughtBy);
+    if (!cur.caughtBy) cur.caughtBy = new Set();
+    if (!cur.attempts) cur.attempts = {};
+    out.current = cur;
+  }
+  return out;
+}
+world = reviveWorld(world);
+
+const dex = loadJson(DEX_FILE, { monsters: [], rarityWeights: {}, balls: {} });
 console.log('[DroMon] Data dir:', DROMON_DATA_DIR);
 console.log('[DroMon] Dex file:', DEX_FILE, 'monsters:', dex.monsters?.length || 0);
 
-// -------- Helpers --------
-function now() { return Date.now(); }
-function pickWeighted(list, weightFn) {
-  const total = list.reduce((s, e) => s + weightFn(e), 0);
+/** =========================
+ *  ENV & tuning
+ *  ========================= */
+const PREFIX = process.env.PREFIX || '!';
+const CHANNELS = (process.env.TWITCH_CHANNELS || '')
+  .split(',')
+  .map(s => s.trim().replace(/^#/, ''))
+  .filter(Boolean);
+
+const SPAWN_INTERVAL_SEC = Number(process.env.SPAWN_INTERVAL_SEC || 300);
+const SPAWN_DESPAWN_SEC = Number(process.env.SPAWN_DESPAWN_SEC || 180);
+let SHINY_RATE_DENOM = Number(process.env.SHINY_RATE_DENOM || 1024);
+
+// Catch odds tuning
+const CATCH_RATE_SCALE = Number(process.env.CATCH_RATE_SCALE || 255);
+const MIN_CATCH = Number(process.env.MIN_CATCH || 0.02);
+const MAX_CATCH = Number(process.env.MAX_CATCH || 0.95);
+const SHINY_CATCH_PENALTY = Number(process.env.SHINY_CATCH_PENALTY || 0.75);
+const BALL_BONUS = {
+  pokeball:  Number(process.env.BONUS_POKEBALL  || 1.0),
+  greatball: Number(process.env.BONUS_GREATBALL || 1.5),
+  ultraball: Number(process.env.BONUS_ULTRABALL || 2.0),
+};
+
+function computeCatchChance(mon, ballName, isShiny) {
+  const rate = Number(mon?.catchRate || 0);
+  let p = (rate / CATCH_RATE_SCALE) * (BALL_BONUS[ballName] || 1.0);
+  if (isShiny) p *= SHINY_CATCH_PENALTY;
+  if (!Number.isFinite(p)) p = 0;
+  p = Math.max(MIN_CATCH, Math.min(MAX_CATCH, p));
+  return p;
+}
+
+/** =========================
+ *  Utils
+ *  ========================= */
+function uc(s) { return String(s || '').toLowerCase(); }
+function isBroadcaster(tags) {
+  return String(tags?.['user-id'] || '') === String(tags?.['room-id'] || '');
+}
+function isModOrBroadcaster(tags) {
+  return Boolean(tags?.mod) || isBroadcaster(tags) || tags?.badges?.broadcaster === '1';
+}
+function ensureUser(username) {
+  const key = uc(username);
+  if (!users[key]) users[key] = { name: key, balls: { pokeball: 0, greatball: 0, ultraball: 0 }, lastDaily: 0, catches: [] };
+  return users[key];
+}
+function pickWeighted(weightMap) {
+  const entries = Object.entries(weightMap || {});
+  const total = entries.reduce((a, [,w]) => a + Number(w||0), 0);
   let r = Math.random() * total;
-  for (const e of list) {
-    r -= weightFn(e);
-    if (r <= 0) return e;
+  for (const [k, w] of entries) { r -= Number(w||0); if (r <= 0) return k; }
+  return entries.length ? entries[0][0] : null;
+}
+function sayChunks(client, channel, header, lines) {
+  const chunks = [];
+  let buf = header || '';
+  for (const ln of lines) {
+    const add = (buf.length ? ' | ' : '') + ln;
+    if ((buf + add).length > 380) { if (buf) chunks.push(buf); buf = ln; }
+    else buf += add;
   }
-  return list[list.length-1];
+  if (buf) chunks.push(buf);
+  for (const c of chunks) client.say(channel, c);
 }
 
-function ensureUser(name) {
-  const k = String(name || '').toLowerCase();
-  if (!users[k]) users[k] = { created: now(), balls: { pokeball: 10, greatball: 5, ultraball: 2 }, lastDaily: 0, dex: {}, catches: [] };
-  return users[k];
+// resolve monsters by rarity weights
+function randomMonster() {
+  const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+  if (!mons.length) return null;
+  const r = pickWeighted(dex.rarityWeights || { Common: 1 });
+  const pool = mons.filter(m => m.rarity === r);
+  if (!pool.length) return mons[Math.floor(Math.random() * mons.length)];
+  return pool[Math.floor(Math.random() * pool.length)];
 }
-function userDisplay(name) { return name?.trim() || 'someone'; }
 
-function rarityWeightOf(mon) {
-  return dex.rarityWeights[mon.rarity] || 1;
+function saveWorld() {
+  const toSave = { ...world };
+  if (toSave.current) {
+    toSave.current = { ...toSave.current, caughtBy: Array.from(toSave.current.caughtBy || []) };
+  }
+  saveJson(WORLD_FILE, toSave);
 }
 
-function spawnOne() {
-  if (!dex.monsters?.length) return null;
-  const mon = pickWeighted(dex.monsters, (m)=>rarityWeightOf(m));
-  const shiny = (Math.floor(Math.random() * SHINY_RATE_DENOM) === 0);
-  const expiresAt = now() + SPAWN_DESPAWN_SEC*1000;
-  world.current = { id: mon.id, name: mon.name, rarity: mon.rarity, hint: mon.hint, shiny, spawnedAt: now(), expiresAt };
-  world.lastSpawnTs = now();
-  saveJson(WORLD_FILE, world);
+/** =========================
+ *  Spawn / End / Throw
+ *  ========================= */
+function spawnOne(channel) {
+  const m = randomMonster();
+  if (!m) return null;
+  const isShiny = Math.floor(Math.random() * SHINY_RATE_DENOM) === 0;
+  world.current = {
+    id: m.id,
+    name: m.name,
+    rarity: m.rarity,
+    hint: m.hint,
+    shiny: Boolean(isShiny),
+    startedAt: Date.now(),
+    endsAt: Date.now() + SPAWN_DESPAWN_SEC * 1000,
+    caughtBy: new Set(),
+    attempts: {},
+    channel
+  };
+  saveWorld();
   return world.current;
 }
 
-function endSpawn() {
+function endSpawn(reason = 'despawn') {
+  const cur = world.current;
+  if (!cur) return;
+  const channel = cur.channel || (CHANNELS.length ? `#${CHANNELS[0]}` : null);
+
+  const caught = Array.from(cur.caughtBy || []);
+  const monName = cur.shiny ? `✨ ${cur.name} ✨` : cur.name;
+
   world.current = null;
-  saveJson(WORLD_FILE, world);
+  saveWorld();
+
+  if (!channel) return;
+
+  if (!caught.length) {
+    client.say(channel, `The wild ${monName} fled. No captures this time.`);
+  } else {
+    const list = caught.map(u => '@' + u).join(', ');
+    client.say(channel, `The wild ${monName} fled! Captured by: ${list}`);
+  }
 }
 
-function ballBonus(ball) {
-  return dex.balls[ball]?.bonus || 1.0;
-}
+/** =========================
+ *  Intro content
+ *  ========================= */
+const DROMON_INTRO_LINES = (p = PREFIX) => [
+  `What is DroMon? → A cozy, Pokémon-style community catch game with original creatures, shinies, and a personal Dex.`,
+  `How it works → Wilds spawn in chat every few minutes. Use ${p}throw pokeball|greatball|ultraball to try a catch.`,
+  `Starter & daily → ${p}mon start gives a save + starter balls • ${p}daily gives a small refill`,
+  `Progress → ${p}dex shows your species/shinies • ${p}bag shows your balls • ${p}scan repeats the current spawn`,
+  `Shinies → Rare sparkle variants; slightly harder to catch (announced with ✨)`,
+  `Examples → ${p}mon start  |  ${p}scan  |  ${p}throw pokeball  |  ${p}daily`,
+  `Mods → ${p}spawn (force a spawn) • ${p}endspawn (despawn) • ${p}giveballs @user 10 ultraball • ${p}setrate shiny 2048`,
+  `Theme → All creatures are original (no Nintendo IP). Mechanics-only homage for stream fun.`,
+];
 
-// Basic catch formula adapted from classic-style: higher catchRate + ball bonus = easier
-function tryCatch(mon, ball) {
-  const base = mon.catchRate || 100;      // 0-255-ish range
-  const bonus = ballBonus(ball);
-  const shinyMod = 0.9; // slightly harder to catch shiny
-  const target = Math.min(255, base * bonus * (world.current?.shiny ? shinyMod : 1));
-  const roll = Math.random() * 255;
-  return roll <= target;
-}
-
-function formatTime(ms) {
-  const s = Math.max(0, Math.floor(ms/1000));
-  return `${s}s`;
-}
-
-// -------- Twitch --------
+/** =========================
+ *  Twitch client
+ *  ========================= */
 const client = new tmi.Client({
-  options: { debug: false },
+  options: { skipUpdatingEmotesets: true },
+  connection: { secure: true, reconnect: true },
   identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
-  channels: CHANNELS
+  channels: CHANNELS.map(c => '#' + c)
 });
 
-client.connect().then(()=>{
-  console.log('[DroMon] Connected.', CHANNELS);
-}).catch(err => console.error('Twitch connect error', err));
+client.on('connected', (addr, port) => {
+  console.log('[DroMon] Connected', addr, port);
+});
+client.on('join', (channel, username, self) => {
+  if (self) console.log('[DroMon] Joined', channel);
+});
 
-function sayAll(msg) {
-  for (const ch of CHANNELS) client.say(ch, msg);
-}
+await client.connect();
 
-function isMod(tags) {
-  return Boolean(tags.mod) || tags.badges?.broadcaster === '1';
-}
-
-// Auto-spawn loop
-setInterval(()=>{
-  if (!world.current && (now() - world.lastSpawnTs) >= SPAWN_INTERVAL_SEC*1000) {
-    const s = spawnOne();
-    if (s) sayAll(`A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appeared! Rarity: ${s.rarity}. Use ${PREFIX}throw pokeball|greatball|ultraball — hint: ${s.hint}`);
-  } else if (world.current && now() >= world.current.expiresAt) {
-    sayAll(`${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} fled into the smoke... (despawn)`);
-    endSpawn();
-  }
-}, 1500);
-
-// -------- Commands --------
-client.on('message', (channel, tags, message, self) => {
-  if (self || !message.startsWith(PREFIX)) return;
-  const username = tags['display-name'] || tags.username;
-  const [raw, ...rest] = message.slice(PREFIX.length).trim().split(/\s+/);
-  const cmd = (raw||'').toLowerCase();
-  const args = rest;
-
-  if (cmd === 'help' || cmd === 'monhelp') {
-    client.say(channel, `@${username} commands: ${PREFIX}mon start • ${PREFIX}bag • ${PREFIX}daily • ${PREFIX}dex • ${PREFIX}throw pokeball|greatball|ultraball • ${PREFIX}scan`);
-    return;
-  }
-
-  if (cmd === 'mon' && args[0]?.toLowerCase() === 'start') {
-    const u = ensureUser(username);
-    saveJson(USERS_FILE, users);
-    client.say(channel, `@${username} save created! Starter pack: 10 pokeball, 5 greatball, 2 ultraball. Use ${PREFIX}bag`);
-    return;
-  }
-
-  if (cmd === 'bag') {
-    const u = ensureUser(username);
-    client.say(channel, `@${username} bag → pokeball:${u.balls.pokeball||0}, greatball:${u.balls.greatball||0}, ultraball:${u.balls.ultraball||0}`);
-    return;
-  }
-
-  if (cmd === 'daily') {
-    const u = ensureUser(username);
-    const day = 24*60*60*1000;
-    if (now() - (u.lastDaily||0) < day) {
-      const left = day - (now() - (u.lastDaily||0));
-      client.say(channel, `@${username} you already claimed daily. Come back in ${formatTime(left)}.`);
-      return;
-    }
-    u.lastDaily = now();
-    u.balls.pokeball = (u.balls.pokeball||0) + 5;
-    u.balls.greatball = (u.balls.greatball||0) + 2;
-    saveJson(USERS_FILE, users);
-    client.say(channel, `@${username} daily claimed: +5 pokeball, +2 greatball.`);
-    return;
-  }
-
-  if (cmd === 'scan') {
-    if (!world.current) {
-      client.say(channel, `@${username} nothing in the grass right now.`);
-    } else {
-      const left = world.current.expiresAt - now();
-      client.say(channel, `@${username} wild ${world.current.shiny ? '✨ ':''}${world.current.name}${world.current.shiny ? ' ✨':''} (Rarity: ${world.current.rarity}) — hint: ${world.current.hint} — ${formatTime(left)} left.`);
-    }
-    return;
-  }
-
-  if (cmd === 'throw') {
-    const ball = (args[0]||'').toLowerCase();
-    if (!['pokeball','greatball','ultraball'].includes(ball)) {
-      client.say(channel, `@${username} usage: ${PREFIX}throw pokeball|greatball|ultraball`);
-      return;
-    }
-    const u = ensureUser(username);
-    if ((u.balls[ball]||0) <= 0) {
-      client.say(channel, `@${username} you have no ${ball}s left. Use ${PREFIX}bag or ${PREFIX}daily.`);
-      return;
-    }
-    if (!world.current) {
-      client.say(channel, `@${username} nothing to catch right now.`);
-      return;
-    }
-    u.balls[ball]--;
-    const mon = dex.monsters.find(m=>m.id===world.current.id);
-    const ok = tryCatch(mon, ball);
-    if (ok) {
-      const shiny = world.current.shiny;
-      const entry = { id: mon.id, name: mon.name, shiny, caughtAt: now() };
-      u.catches.push(entry);
-      u.dex[mon.id] = (u.dex[mon.id]||0) + 1;
-      saveJson(USERS_FILE, users);
-      client.say(channel, `@${username} caught ${shiny ? '✨ ':''}${mon.name}${shiny ? ' ✨':''}! Dex+1. (Used 1 ${ball})`);
-      // end spawn once caught
-      endSpawn();
-    } else {
-      saveJson(USERS_FILE, users);
-      client.say(channel, `@${username} the ${world.current.name} broke free! (Used 1 ${ball})`);
-    }
-    return;
-  }
-
-  if (cmd === 'dex') {
-    const u = ensureUser(username);
-    const totalSpecies = dex.monsters.length;
-    const seen = Object.keys(u.dex).length;
-    const shinyCount = u.catches.filter(c=>c.shiny).length;
-    client.say(channel, `@${username} Dex: ${seen}/${totalSpecies} species • Shinies: ${shinyCount} • Total caught: ${u.catches.length}`);
-    return;
-  }
-
-  // ---- Mods ----
-// --- robust mod/broadcaster gate (inline helper for this block)
-const _isModOrBroadcaster = (t) =>
-  Boolean(t?.mod) ||
-  t?.badges?.broadcaster === '1' ||
-  String(t?.['user-id'] || '') === String(t?.['room-id'] || '');
-
-if (cmd === 'spawn') {
-  if (!_isModOrBroadcaster(tags)) {
-    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}spawn.`);
-    return;
-  }
-  if (world.current) {
-    client.say(channel, `@${username} a wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} is already out. Use ${PREFIX}scan.`);
-    return;
-  }
-  const s = spawnOne();
-  if (s) {
-    client.say(channel, `Forced spawn → wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} (Rarity: ${s.rarity}) appeared! Hint: ${s.hint}`);
-  } else {
-    client.say(channel, `@${username} spawn failed (no creatures in the Dex?). Check data/mondex.json.`);
-  }
-  return;
-}
-
-if (cmd === 'endspawn') {
-  if (!_isModOrBroadcaster(tags)) {
-    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}endspawn.`);
+/** =========================
+ *  Auto-spawn heartbeat
+ *  ========================= */
+setInterval(() => {
+  if (!CHANNELS.length) return;
+  if (world.current && Date.now() >= (world.current.endsAt || 0)) {
+    endSpawn('timeout');
     return;
   }
   if (!world.current) {
-    client.say(channel, `@${username} no active spawn.`);
-    return;
-  }
-  client.say(channel, `@${username} ended the encounter with ${world.current.name}.`);
-  endSpawn();
-  return;
-}
-
-if (cmd === 'giveballs') {
-  if (!_isModOrBroadcaster(tags)) {
-    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}giveballs.`);
-    return;
-  }
-  const target = args[0]?.replace(/^@/, '') || '';
-  const amount = parseInt(args[1] || '0', 10);
-  const ball = (args[2] || '').toLowerCase();
-  if (!target || isNaN(amount) || amount <= 0 || !['pokeball', 'greatball', 'ultraball'].includes(ball)) {
-    client.say(channel, `Usage: ${PREFIX}giveballs @user 10 ultraball`);
-    return;
-  }
-  const u = ensureUser(target);
-  u.balls[ball] = (u.balls[ball] || 0) + amount;
-  saveJson(USERS_FILE, users);
-  client.say(channel, `Gave @${target} +${amount} ${ball}(s).`);
-  return;
-}
-
-if (cmd === 'setrate') {
-  if (!_isModOrBroadcaster(tags)) {
-    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}setrate.`);
-    return;
-  }
-  if (args[0]?.toLowerCase() === 'shiny') {
-    const denom = parseInt(args[1] || '0', 10);
-    if (denom >= 64 && denom <= 65536) {
-      SHINY_RATE_DENOM = denom;
-      client.say(channel, `Shiny rate set to 1/${denom}.`);
-    } else {
-      client.say(channel, `Pick a sensible shiny denom (64..65536).`);
+    const since = Date.now() - (world.lastSpawnTs || 0);
+    if (since >= SPAWN_INTERVAL_SEC * 1000) {
+      const chan = `#${CHANNELS[0]}`;
+      const s = spawnOne(chan);
+      if (s) {
+        client.say(chan, `A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} (${s.rarity}) appeared! Hint: ${s.hint}`);
+        world.lastSpawnTs = Date.now();
+        saveWorld();
+      }
     }
-  } else {
-    client.say(channel, `Usage: ${PREFIX}setrate shiny <denominator>  (e.g., ${PREFIX}setrate shiny 2048)`);
   }
-  return;
-}
+}, 1000);
+
+/** =========================
+ *  Command handling
+ *  ========================= */
+client.on('message', async (channel, tags, message, self) => {
+  if (self) return;
+  if (!message.startsWith(PREFIX)) return;
+
+  const username = (tags['display-name'] || tags.username || 'user').toLowerCase();
+  const parts = message.slice(PREFIX.length).trim().split(/\s+/);
+  const cmd = (parts.shift() || '').toLowerCase();
+  const args = parts;
+
+  // Intro
+  if (cmd === 'dromon' || cmd === 'monabout' || cmd === 'intro') {
+    sayChunks(client, channel, `DroMon intro:`, DROMON_INTRO_LINES(PREFIX));
+    return;
+  }
+
+  // Help
+  if (cmd === 'help' || cmd === 'monhelp') {
+    client.say(channel, `@${username} cmds: ${PREFIX}mon start • ${PREFIX}bag • ${PREFIX}daily • ${PREFIX}dex • ${PREFIX}throw <ball> • ${PREFIX}scan • ${PREFIX}dromon`);
+    return;
+  }
+
+  // Start save
+  if (cmd === 'mon' && args[0] === 'start') {
+    const u = ensureUser(username);
+    if (!u._started) {
+      u._started = true;
+      u.balls.pokeball += 10;
+      u.balls.greatball += 5;
+      u.balls.ultraball += 2;
+      saveJson(USERS_FILE, users);
+      client.say(channel, `@${username} save created! Starter pack: +10 pokeball, +5 greatball, +2 ultraball. Use ${PREFIX}scan then ${PREFIX}throw pokeball.`);
+    } else {
+      client.say(channel, `@${username} you already have a save. Check ${PREFIX}bag.`);
+    }
+    return;
+  }
+
+  // Daily
+  if (cmd === 'daily') {
+    const u = ensureUser(username);
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    if (now - (u.lastDaily || 0) < DAY) {
+      const leftMs = (u.lastDaily || 0) + DAY - now;
+      const leftH = Math.max(0, Math.ceil(leftMs / 3600000));
+      client.say(channel, `@${username} daily already claimed. Try again in ~${leftH}h.`);
+      return;
+    }
+    u.lastDaily = now;
+    u.balls.pokeball += 5;
+    u.balls.greatball += 2;
+    u.balls.ultraball += 1;
+    saveJson(USERS_FILE, users);
+    client.say(channel, `@${username} daily claimed: +5 pokeball, +2 greatball, +1 ultraball.`);
+    return;
+  }
+
+  // Bag
+  if (cmd === 'bag') {
+    const u = ensureUser(username);
+    client.say(channel, `@${username} bag → pokeball:${u.balls.pokeball||0} | greatball:${u.balls.greatball||0} | ultraball:${u.balls.ultraball||0}`);
+    return;
+  }
+
+  // Dex
+  if (cmd === 'dex') {
+    const u = ensureUser(username);
+    const total = (dex.monsters || []).length;
+    const caughtIds = new Set((u.catches || []).map(c => c.id));
+    const shinyCount = (u.catches || []).filter(c => c.shiny).length;
+    client.say(channel, `@${username} Dex → ${caughtIds.size}/${total} species • ${shinyCount} shinies.`);
+    return;
+  }
+
+  // Scan
+  if (cmd === 'scan') {
+    if (!world.current) { client.say(channel, `No wild appears.`); return; }
+    const secLeft = Math.max(0, Math.ceil((world.current.endsAt - Date.now()) / 1000));
+    client.say(channel, `Wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} (${world.current.rarity}) • Hint: ${world.current.hint} • ${secLeft}s left`);
+    return;
+  }
+
+  // Throw (no immediate reveal)
+  if (cmd === 'throw') {
+    const ball = (args[0] || '').toLowerCase();
+    if (!['pokeball', 'greatball', 'ultraball'].includes(ball)) {
+      client.say(channel, `@${username} usage: ${PREFIX}throw pokeball|greatball|ultraball`);
+      return;
+    }
+    if (!world.current) {
+      client.say(channel, `@${username} there is no active encounter. Use ${PREFIX}scan and wait for a spawn.`);
+      return;
+    }
+    const u = ensureUser(username);
+    if ((u.balls[ball] || 0) <= 0) {
+      client.say(channel, `@${username} you have no ${ball}s. Check ${PREFIX}daily or ${PREFIX}bag.`);
+      return;
+    }
+    // Spend ball
+    u.balls[ball] = (u.balls[ball] || 0) - 1;
+    saveJson(USERS_FILE, users);
+
+    // Compute success
+    const mon = (dex.monsters || []).find(x => x.id === world.current.id) || { catchRate: 0 };
+    const p = computeCatchChance(mon, ball, world.current.shiny);
+    const roll = Math.random();
+    const success = roll < p;
+
+    world.current.attempts[uc(username)] = { ball, p, roll, success, ts: Date.now() };
+    if (success) {
+      world.current.caughtBy.add(uc(username));
+      // Persist success in user catches immediately (inventory), but don't announce
+      u.catches = u.catches || [];
+      u.catches.push({ id: mon.id, name: mon.name, shiny: world.current.shiny, ts: Date.now() });
+      saveJson(USERS_FILE, users);
+    }
+    saveWorld();
+
+    client.say(channel, `@${username} threw a ${ball}! Results will be revealed when the encounter ends.`);
+    return;
+  }
+
+  /** ====== MOD / BROADCASTER COMMANDS ====== */
+  if (cmd === 'spawn') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}spawn.`); return; }
+    if (world.current) { client.say(channel, `@${username} a wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} is already out. Use ${PREFIX}scan.`); return; }
+    const s = spawnOne(channel);
+    if (!s) { client.say(channel, `@${username} spawn failed (no creatures in Dex?).`); return; }
+    client.say(channel, `Forced spawn → wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} (${s.rarity}) appeared! Hint: ${s.hint}`);
+    return;
+  }
+
+  if (cmd === 'endspawn') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}endspawn.`); return; }
+    if (!world.current) { client.say(channel, `@${username} no active spawn.`); return; }
+    client.say(channel, `@${username} ended the encounter with ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''}.`);
+    endSpawn('manual');
+    return;
+  }
+
+  if (cmd === 'giveballs') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}giveballs.`); return; }
+    const target = (args[0] || '').replace(/^@/, '');
+    const amount = parseInt(args[1] || '0', 10);
+    const ball = (args[2] || '').toLowerCase();
+    if (!target || !Number.isFinite(amount) || amount <= 0 || !['pokeball','greatball','ultraball'].includes(ball)) {
+      client.say(channel, `Usage: ${PREFIX}giveballs @user 10 ultraball`);
+      return;
+    }
+    const tu = ensureUser(target);
+    tu.balls[ball] = (tu.balls[ball] || 0) + amount;
+    saveJson(USERS_FILE, users);
+    client.say(channel, `Gave @${target} +${amount} ${ball}(s).`);
+    return;
+  }
+
+  if (cmd === 'setrate') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}setrate.`); return; }
+    if ((args[0] || '').toLowerCase() === 'shiny') {
+      const denom = parseInt(args[1] || '0', 10);
+      if (denom >= 64 && denom <= 65536) {
+        SHINY_RATE_DENOM = denom;
+        client.say(channel, `Shiny rate set to 1/${denom}.`);
+      } else {
+        client.say(channel, `Pick a sensible shiny denom (64..65536).`);
+      }
+    } else {
+      client.say(channel, `Usage: ${PREFIX}setrate shiny <denominator> (e.g., ${PREFIX}setrate shiny 2048)`);
+    }
+    return;
+  }
 });

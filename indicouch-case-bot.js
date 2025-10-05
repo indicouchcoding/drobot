@@ -708,7 +708,27 @@ const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/var/data') ? '/var/dat
 const INV_PATH = path.join(DATA_DIR, 'inventories.json');
 const STATS_PATH = path.join(DATA_DIR, 'stats.json');
 const DEFAULTS_PATH = path.join(DATA_DIR, 'defaults.json');
+// ---- One-time migration (copy old data into new DATA_DIR) ----
+// Set OLD_DATA_DIR in env for ONE deploy, then remove it.
+const OLD_DATA_DIR = process.env.OLD_DATA_DIR; // e.g., "/var/data/indicouch"
+if (OLD_DATA_DIR && fs.existsSync(OLD_DATA_DIR)) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+    const files = ['inventories.json', 'stats.json', 'defaults.json'];
+    for (const f of files) {
+      const src = path.join(OLD_DATA_DIR, f);
+      const dst = path.join(DATA_DIR, f);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) {
+        fs.copyFileSync(src, dst);
+        console.log('[migrate] copied', src, '->', dst);
+      }
+    }
+  } catch (e) {
+    console.error('[migrate] failed:', e?.message || e);
+  }
+}
+// ---- end migration ----
 function ensureData() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(INV_PATH)) fs.writeFileSync(INV_PATH, JSON.stringify({}, null, 2));

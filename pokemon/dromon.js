@@ -216,48 +216,79 @@ client.on('message', (channel, tags, message, self) => {
   }
 
   // ---- Mods ----
-  if (cmd === 'spawn' && isMod(tags)) {
-    if (world.current) {
-      client.say(channel, `@${username} a wild ${world.current.name} is already out.`);
-      return;
-    }
-    const s = spawnOne();
-    if (s) client.say(channel, `Forced spawn → wild ${s.shiny ? '✨ ':''}${s.name}${s.shiny ? ' ✨':''} (Rarity: ${s.rarity}) appeared! Hint: ${s.hint}`);
-    return;
-  }
+// --- robust mod/broadcaster gate (inline helper for this block)
+const _isModOrBroadcaster = (t) =>
+  Boolean(t?.mod) ||
+  t?.badges?.broadcaster === '1' ||
+  String(t?.['user-id'] || '') === String(t?.['room-id'] || '');
 
-  if (cmd === 'endspawn' && isMod(tags)) {
-    if (!world.current) { client.say(channel, `@${username} no active spawn.`); return; }
-    client.say(channel, `@${username} ended the encounter with ${world.current.name}.`);
-    endSpawn();
+if (cmd === 'spawn') {
+  if (!_isModOrBroadcaster(tags)) {
+    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}spawn.`);
     return;
   }
+  if (world.current) {
+    client.say(channel, `@${username} a wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} is already out. Use ${PREFIX}scan.`);
+    return;
+  }
+  const s = spawnOne();
+  if (s) {
+    client.say(channel, `Forced spawn → wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} (Rarity: ${s.rarity}) appeared! Hint: ${s.hint}`);
+  } else {
+    client.say(channel, `@${username} spawn failed (no creatures in the Dex?). Check data/mondex.json.`);
+  }
+  return;
+}
 
-  if (cmd === 'giveballs' && isMod(tags)) {
-    const target = args[0]?.replace(/^@/,'') || '';
-    const amount = parseInt(args[1]||'0', 10);
-    const ball = (args[2]||'').toLowerCase();
-    if (!target || isNaN(amount) || amount<=0 || !['pokeball','greatball','ultraball'].includes(ball)) {
-      client.say(channel, `Usage: ${PREFIX}giveballs @user 10 ultraball`);
-      return;
-    }
-    const u = ensureUser(target);
-    u.balls[ball] = (u.balls[ball]||0) + amount;
-    saveJson(USERS_FILE, users);
-    client.say(channel, `Gave @${target} +${amount} ${ball}(s).`);
+if (cmd === 'endspawn') {
+  if (!_isModOrBroadcaster(tags)) {
+    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}endspawn.`);
     return;
   }
+  if (!world.current) {
+    client.say(channel, `@${username} no active spawn.`);
+    return;
+  }
+  client.say(channel, `@${username} ended the encounter with ${world.current.name}.`);
+  endSpawn();
+  return;
+}
 
-  if (cmd === 'setrate' && isMod(tags)) {
-    if (args[0]?.toLowerCase() === 'shiny') {
-      const denom = parseInt(args[1]||'0', 10);
-      if (denom >= 64 && denom <= 65536) {
-        SHINY_RATE_DENOM = denom;
-        client.say(channel, `Shiny rate set to 1/${denom}.`);
-      } else {
-        client.say(channel, `Pick a sensible shiny denom (64..65536).`);
-      }
-    }
+if (cmd === 'giveballs') {
+  if (!_isModOrBroadcaster(tags)) {
+    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}giveballs.`);
     return;
   }
+  const target = args[0]?.replace(/^@/, '') || '';
+  const amount = parseInt(args[1] || '0', 10);
+  const ball = (args[2] || '').toLowerCase();
+  if (!target || isNaN(amount) || amount <= 0 || !['pokeball', 'greatball', 'ultraball'].includes(ball)) {
+    client.say(channel, `Usage: ${PREFIX}giveballs @user 10 ultraball`);
+    return;
+  }
+  const u = ensureUser(target);
+  u.balls[ball] = (u.balls[ball] || 0) + amount;
+  saveJson(USERS_FILE, users);
+  client.say(channel, `Gave @${target} +${amount} ${ball}(s).`);
+  return;
+}
+
+if (cmd === 'setrate') {
+  if (!_isModOrBroadcaster(tags)) {
+    client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}setrate.`);
+    return;
+  }
+  if (args[0]?.toLowerCase() === 'shiny') {
+    const denom = parseInt(args[1] || '0', 10);
+    if (denom >= 64 && denom <= 65536) {
+      SHINY_RATE_DENOM = denom;
+      client.say(channel, `Shiny rate set to 1/${denom}.`);
+    } else {
+      client.say(channel, `Pick a sensible shiny denom (64..65536).`);
+    }
+  } else {
+    client.say(channel, `Usage: ${PREFIX}setrate shiny <denominator>  (e.g., ${PREFIX}setrate shiny 2048)`);
+  }
+  return;
+}
 });

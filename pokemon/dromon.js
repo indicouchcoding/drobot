@@ -2,35 +2,63 @@
 import 'dotenv/config';
 import tmi from 'tmi.js';
 import fs from 'fs';
+import path from 'path';
 
-// -------- Files --------
-const USERS_FILE = './data/users.json';
-const WORLD_FILE = './data/world.json';
-const DEX_FILE = './data/mondex.json';
+// -------- File paths (robust) --------
+// Resolve relative to this file (pokemon/dromon.js), not process CWD
+const HERE = path.dirname(new URL(import.meta.url).pathname);
+
+// Writable data dir (can override via env)
+const DROMON_DATA_DIR =
+  process.env.DROMON_DATA_DIR ||          // e.g., /opt/render/project/src/pokemon/data  or  /data/dromon
+  path.join(HERE, 'data');                // default: pokemon/data next to this file
+
+if (!fs.existsSync(DROMON_DATA_DIR)) fs.mkdirSync(DROMON_DATA_DIR, { recursive: true });
+
+const USERS_FILE = path.join(DROMON_DATA_DIR, 'users.json');
+const WORLD_FILE = path.join(DROMON_DATA_DIR, 'world.json');
+
+// Dex file: allow explicit override, else use repo copy next to the script
+const DEX_FILE =
+  process.env.DROMON_DEX_FILE ||          // e.g., /opt/render/project/src/pokemon/data/mondex.json
+  path.join(HERE, 'data', 'mondex.json');
 
 // -------- Env --------
 const PREFIX = process.env.PREFIX || '!';
-const CHANNELS = (process.env.TWITCH_CHANNELS || '').split(',').map(s=>s.trim()).filter(Boolean);
+const CHANNELS = (process.env.TWITCH_CHANNELS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 const SPAWN_INTERVAL_SEC = Number(process.env.SPAWN_INTERVAL_SEC || 300);
 const SPAWN_DESPAWN_SEC = Number(process.env.SPAWN_DESPAWN_SEC || 180);
 let SHINY_RATE_DENOM = Number(process.env.SHINY_RATE_DENOM || 1024);
 
-// -------- Load data --------
-function loadJson(path, fallback) {
+// -------- Load/save helpers --------
+function loadJson(filePath, fallback) {
   try {
-    if (fs.existsSync(path)) return JSON.parse(fs.readFileSync(path, 'utf-8'));
-  } catch (e) { console.error('Load failed', path, e); }
+    if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    console.warn('[DroMon] JSON not found at', filePath);
+  } catch (e) {
+    console.error('[DroMon] Load failed', filePath, e?.message || e);
+  }
   return fallback;
 }
-function saveJson(path, obj) {
+function saveJson(filePath, obj) {
   try {
-    fs.writeFileSync(path, JSON.stringify(obj, null, 2));
-  } catch (e) { console.error('Save failed', path, e); }
+    fs.writeFileSync(filePath, JSON.stringify(obj, null, 2));
+  } catch (e) {
+    console.error('[DroMon] Save failed', filePath, e?.message || e);
+  }
 }
 
+// -------- Load data --------
 let users = loadJson(USERS_FILE, {});
 let world = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });
 const dex = loadJson(DEX_FILE, { monsters: [], rarityWeights: {}, balls: {} });
+
+// Helpful log so you can confirm on Render
+console.log('[DroMon] Data dir:', DROMON_DATA_DIR);
+console.log('[DroMon] Dex file:', DEX_FILE, 'monsters:', dex.monsters?.length || 0);
 
 // -------- Helpers --------
 function now() { return Date.now(); }

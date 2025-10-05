@@ -1,0 +1,15 @@
+{
+  "name": "dromon-bot",
+  "version": "1.0.0",
+  "description": "DroMon \u2014 community creature game for Twitch chat (DroBot module)",
+  "type": "module",
+  "main": "dromon.js",
+  "scripts": {
+    "start": "node dromon.js",
+    "dev": "node --watch dromon.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "tmi.js": "^1.8.5"
+  }
+}

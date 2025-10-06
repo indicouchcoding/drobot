@@ -37,7 +37,7 @@ function saveJson(filePath, obj) {
 const OLD_DATA_DIR = path.join(HERE, 'data');
 function maybeMigrateOldSaves() {
   try {
-    if (!fs.existsSync(DROMON_DATA_DIR)) fs.mkdirkdirs && fs.mkdirSync(DROMON_DATA_DIR, { recursive: true });
+    if (!fs.existsSync(DROMON_DATA_DIR)) fs.mkdirSync(DROMON_DATA_DIR, { recursive: true });
 
     const oldUsers = path.join(OLD_DATA_DIR, 'users.json');
     const oldWorld = path.join(OLD_DATA_DIR, 'world.json');
@@ -68,19 +68,33 @@ function loadDex() {
   try {
     if (!fs.existsSync(DEX_FILE)) {
       console.error('[DroMon] Dex file missing:', DEX_FILE);
-      return { monsters: [], rarityWeights: {}, balls: {} };
+      return { monsters: [], rarityWeights: {}, balls: {}, __reason: 'missing' };
     }
     const raw = fs.readFileSync(DEX_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.monsters)) {
-      console.error('[DroMon] Dex has no monsters array.');
-      return { monsters: [], rarityWeights: {}, balls: {} };
+
+    if (!raw || raw.trim().length < 10) {
+      console.error('[DroMon] Dex file looks empty/suspicious length:', DEX_FILE);
+      return { monsters: [], rarityWeights: {}, balls: {}, __reason: 'empty' };
     }
-    console.log('[DroMon] Dex loaded:', parsed.monsters.length, 'monsters');
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      console.error('[DroMon] Dex JSON parse error:', e?.message || e, 'at', DEX_FILE);
+      return { monsters: [], rarityWeights: {}, balls: {}, __reason: 'parse' };
+    }
+
+    if (!Array.isArray(parsed.monsters)) {
+      console.error('[DroMon] Dex has no "monsters" array at', DEX_FILE);
+      return { monsters: [], rarityWeights: {}, balls: {}, __reason: 'no_monsters' };
+    }
+
+    console.log('[DroMon] Dex loaded:', parsed.monsters.length, 'monsters from', DEX_FILE);
     return parsed;
   } catch (e) {
-    console.error('[DroMon] Dex parse/load error:', e?.message || e);
-    return { monsters: [], rarityWeights: {}, balls: {} };
+    console.error('[DroMon] Dex load error:', e?.message || e, 'at', DEX_FILE);
+    return { monsters: [], rarityWeights: {}, balls: {}, __reason: 'exception' };
   }
 }
 
@@ -206,14 +220,24 @@ function sayChunks(client, channel, header, lines) {
 function randomMonster() {
   let mons = Array.isArray(dex.monsters) ? dex.monsters : [];
   if (!mons.length) {
+    console.warn('[DroMon] randomMonster: monsters empty; reloading Dex…');
     dex = loadDex();
     mons = Array.isArray(dex.monsters) ? dex.monsters : [];
-    if (!mons.length) return null;
+    if (!mons.length) {
+      console.error('[DroMon] randomMonster: still empty after reload. reason =', dex.__reason, 'path =', DEX_FILE);
+      return null;
+    }
   }
   const r = pickWeighted(dex.rarityWeights || { Common: 1 });
   const pool = mons.filter(m => m.rarity === r);
-  if (!pool.length) return mons[Math.floor(Math.random() * mons.length)];
-  return pool[Math.floor(Math.random() * mons.length)];
+  if (!pool.length) {
+    if (!randomMonster._lastNoPoolLog || Date.now() - randomMonster._lastNoPoolLog > 60000) {
+      console.warn('[DroMon] randomMonster: empty pool for rarity', r, '— falling back to any of', mons.length);
+      randomMonster._lastNoPoolLog = Date.now();
+    }
+    return mons[Math.floor(Math.random() * mons.length)];
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function saveWorld() {
@@ -321,6 +345,9 @@ setInterval(() => {
         );
         world.lastSpawnTs = Date.now();
         saveWorld();
+      } else {
+        const n = Array.isArray(dex.monsters) ? dex.monsters.length : 0;
+        console.warn('[DroMon] Auto-spawn skipped: no monster (dex size =', n, 'reason =', dex.__reason, ')');
       }
     }
   }
@@ -365,6 +392,19 @@ client.on('message', async (channel, tags, message, self) => {
     const total = Array.isArray(dex.monsters) ? dex.monsters.length : 0;
     const rs = Object.entries(dex.rarityWeights || {}).map(([k,v]) => `${k}:${v}`).join(' | ') || 'n/a';
     client.say(channel, `Dex: ${total} monsters • rarity weights: ${rs}`);
+    return;
+  }
+  if (cmd === 'dexpath') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `mods only`); return; }
+    client.say(channel, `Dex path: ${DEX_FILE}`);
+    return;
+  }
+  if (cmd === 'spawncheck') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `mods only`); return; }
+    const n = Array.isArray(dex.monsters) ? dex.monsters.length : 0;
+    const rs = Object.entries(dex.rarityWeights || {}).map(([k,v]) => `${k}:${v}`).join(' | ') || 'n/a';
+    const sample = (dex.monsters || []).slice(0, 3).map(m => m.name).join(', ') || 'none';
+    client.say(channel, `Dex: ${n} monsters • weights: ${rs} • sample: ${sample}`);
     return;
   }
 
@@ -494,7 +534,11 @@ client.on('message', async (channel, tags, message, self) => {
     if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}spawn.`); return; }
     if (world.current) { client.say(channel, `@${username} a wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} is already out. Use ${PREFIX}scan.`); return; }
     const s = spawnOne(channel);
-    if (!s) { client.say(channel, `@${username} spawn skipped — Dex is empty or invalid. Try ${PREFIX}dexreload (mods) or check server logs.`); return; }
+    if (!s) {
+      const n = Array.isArray(dex.monsters) ? dex.monsters.length : 0;
+      client.say(channel, `spawn skipped — Dex has ${n} monsters (reason: ${dex.__reason || 'unknown'}). Try ${PREFIX}dexreload or ${PREFIX}dexpath to verify.`);
+      return;
+    }
     client.say(
       channel,
       `TwitchLit A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appears TwitchLit Catch it using !throw (winners revealed in ${Math.round(SPAWN_DESPAWN_SEC)}s)`

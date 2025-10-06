@@ -1,4 +1,3 @@
-
 import 'dotenv/config';
 import tmi from 'tmi.js';
 import fs from 'fs';
@@ -150,7 +149,7 @@ function spawnOne(channel) {
     id: m.id,
     name: m.name,
     rarity: m.rarity,
-    hint: m.hint,
+    // hint removed
     shiny: Boolean(isShiny),
     startedAt: Date.now(),
     endsAt: Date.now() + SPAWN_DESPAWN_SEC * 1000,
@@ -231,7 +230,11 @@ setInterval(() => {
       const chan = `#${CHANNELS[0]}`;
       const s = spawnOne(chan);
       if (s) {
-        client.say(chan, `A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} (${s.rarity}) appeared! Hint: ${s.hint}`);
+        // NEW message (no hint)
+        client.say(
+          chan,
+          `TwitchLit A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appears TwitchLit Catch it using !throw (winners revealed in ${Math.round(SPAWN_DESPAWN_SEC)}s)`
+        );
         world.lastSpawnTs = Date.now();
         saveWorld();
       }
@@ -316,11 +319,11 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // Scan
+  // Scan (no hint)
   if (cmd === 'scan') {
     if (!world.current) { client.say(channel, `No wild appears.`); return; }
     const secLeft = Math.max(0, Math.ceil((world.current.endsAt - Date.now()) / 1000));
-    client.say(channel, `Wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} (${world.current.rarity}) • Hint: ${world.current.hint} • ${secLeft}s left`);
+    client.say(channel, `Wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} (${world.current.rarity}) • ${secLeft}s left`);
     return;
   }
 
@@ -370,7 +373,11 @@ client.on('message', async (channel, tags, message, self) => {
     if (world.current) { client.say(channel, `@${username} a wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} is already out. Use ${PREFIX}scan.`); return; }
     const s = spawnOne(channel);
     if (!s) { client.say(channel, `@${username} spawn failed (no creatures in Dex?).`); return; }
-    client.say(channel, `Forced spawn → wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} (${s.rarity}) appeared! Hint: ${s.hint}`);
+    // NEW message (no hint) for forced spawns too
+    client.say(
+      channel,
+      `TwitchLit A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appears TwitchLit Catch it using !throw (winners revealed in ${Math.round(SPAWN_DESPAWN_SEC)}s)`
+    );
     return;
   }
 

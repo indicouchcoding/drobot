@@ -30,11 +30,14 @@ function saveJson(filePath, obj) {
     console.error('[DroMon] Save failed', filePath, e?.message || e);
   }
 }
-// --- One-time migration from repo folder -> persistent disk ---
+
+/** =========================
+ *  One-time migration (repo data -> persistent disk) 
+ *  ========================= */
 const OLD_DATA_DIR = path.join(HERE, 'data');
 function maybeMigrateOldSaves() {
   try {
-    if (!fs.existsSync(DROMON_DATA_DIR)) fs.mkdirSync(DROMON_DATA_DIR, { recursive: true });
+    if (!fs.existsSync(DROMON_DATA_DIR)) fs.mkdirkdirs && fs.mkdirSync(DROMON_DATA_DIR, { recursive: true });
 
     const oldUsers = path.join(OLD_DATA_DIR, 'users.json');
     const oldWorld = path.join(OLD_DATA_DIR, 'world.json');
@@ -42,7 +45,6 @@ function maybeMigrateOldSaves() {
     const newUsers = USERS_FILE;
     const newWorld = WORLD_FILE;
 
-    // Only migrate if new files don't exist but old ones do
     let moved = false;
     if (!fs.existsSync(newUsers) && fs.existsSync(oldUsers)) {
       fs.copyFileSync(oldUsers, newUsers);
@@ -52,17 +54,39 @@ function maybeMigrateOldSaves() {
       fs.copyFileSync(oldWorld, newWorld);
       moved = true;
     }
-    if (moved) {
-      console.log('[DroMon] Migrated users/world from repo folder to persistent disk.');
-    }
+    if (moved) console.log('[DroMon] Migrated users/world from repo folder to persistent disk.');
   } catch (e) {
     console.error('[DroMon] Migration error:', e?.message || e);
   }
 }
 maybeMigrateOldSaves();
 
+/** =========================
+ *  Dex loader (hardened) 
+ *  ========================= */
+function loadDex() {
+  try {
+    if (!fs.existsSync(DEX_FILE)) {
+      console.error('[DroMon] Dex file missing:', DEX_FILE);
+      return { monsters: [], rarityWeights: {}, balls: {} };
+    }
+    const raw = fs.readFileSync(DEX_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.monsters)) {
+      console.error('[DroMon] Dex has no monsters array.');
+      return { monsters: [], rarityWeights: {}, balls: {} };
+    }
+    console.log('[DroMon] Dex loaded:', parsed.monsters.length, 'monsters');
+    return parsed;
+  } catch (e) {
+    console.error('[DroMon] Dex parse/load error:', e?.message || e);
+    return { monsters: [], rarityWeights: {}, balls: {} };
+  }
+}
+
 let users = loadJson(USERS_FILE, {});
 let world  = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });
+let dex    = loadDex();
 
 // revive Set in world.current.caughtBy after a reload
 function reviveWorld(w) {
@@ -79,9 +103,8 @@ function reviveWorld(w) {
 }
 world = reviveWorld(world);
 
-const dex = loadJson(DEX_FILE, { monsters: [], rarityWeights: {}, balls: {} });
 console.log('[DroMon] Data dir:', DROMON_DATA_DIR);
-console.log('[DroMon] Dex file:', DEX_FILE, 'monsters:', dex.monsters?.length || 0);
+console.log('[DroMon] Dex file:', DEX_FILE);
 
 /** =========================
  *  ENV & tuning
@@ -97,6 +120,7 @@ const SPAWN_DESPAWN_SEC = Number(process.env.SPAWN_DESPAWN_SEC || 180);
 let SHINY_RATE_DENOM = Number(process.env.SHINY_RATE_DENOM || 1024);
 
 // Catch odds tuning
+const CATCH_RATE_MODE = (process.env.CATCH_RATE_MODE || 'raw255').toLowerCase(); // 'raw255' | 'percent' | 'unit'
 const CATCH_RATE_SCALE = Number(process.env.CATCH_RATE_SCALE || 255);
 const MIN_CATCH = Number(process.env.MIN_CATCH || 0.02);
 const MAX_CATCH = Number(process.env.MAX_CATCH || 0.95);
@@ -108,8 +132,16 @@ const BALL_BONUS = {
 };
 
 function computeCatchChance(mon, ballName, isShiny) {
-  const rate = Number(mon?.catchRate || 0);
-  let p = (rate / CATCH_RATE_SCALE) * (BALL_BONUS[ballName] || 1.0);
+  const rate = Number(mon?.catchRate ?? 0);
+  let base;
+  if (CATCH_RATE_MODE === 'percent') {
+    base = rate / 100;          // e.g., 1.1923 => 1.1923%
+  } else if (CATCH_RATE_MODE === 'unit') {
+    base = rate;                // e.g., 0.30 => 30%
+  } else {
+    base = rate / CATCH_RATE_SCALE; // 0..255 scale
+  }
+  let p = base * (BALL_BONUS[ballName] || 1.0);
   if (isShiny) p *= SHINY_CATCH_PENALTY;
   if (!Number.isFinite(p)) p = 0;
   p = Math.max(MIN_CATCH, Math.min(MAX_CATCH, p));
@@ -153,6 +185,7 @@ function ensureUser(username) {
 function pickWeighted(weightMap) {
   const entries = Object.entries(weightMap || {});
   const total = entries.reduce((a, [,w]) => a + Number(w||0), 0);
+  if (total <= 0) return null;
   let r = Math.random() * total;
   for (const [k, w] of entries) { r -= Number(w||0); if (r <= 0) return k; }
   return entries.length ? entries[0][0] : null;
@@ -169,10 +202,14 @@ function sayChunks(client, channel, header, lines) {
   for (const c of chunks) client.say(channel, c);
 }
 
-// resolve monsters by rarity weights
+// resolve monsters by rarity weights (with auto-reload if empty)
 function randomMonster() {
-  const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
-  if (!mons.length) return null;
+  let mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+  if (!mons.length) {
+    dex = loadDex();
+    mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+    if (!mons.length) return null;
+  }
   const r = pickWeighted(dex.rarityWeights || { Common: 1 });
   const pool = mons.filter(m => m.rarity === r);
   if (!pool.length) return mons[Math.floor(Math.random() * mons.length)];
@@ -198,7 +235,6 @@ function spawnOne(channel) {
     id: m.id,
     name: m.name,
     rarity: m.rarity,
-    // hint removed
     shiny: Boolean(isShiny),
     startedAt: Date.now(),
     endsAt: Date.now() + SPAWN_DESPAWN_SEC * 1000,
@@ -279,7 +315,6 @@ setInterval(() => {
       const chan = `#${CHANNELS[0]}`;
       const s = spawnOne(chan);
       if (s) {
-        // NEW message (no hint)
         client.say(
           chan,
           `TwitchLit A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appears TwitchLit Catch it using !throw (winners revealed in ${Math.round(SPAWN_DESPAWN_SEC)}s)`
@@ -316,6 +351,20 @@ client.on('message', async (channel, tags, message, self) => {
       `@${username} cmds: ${PREFIX}mon start • ${PREFIX}daily • ${PREFIX}bag • ${PREFIX}dex • ${PREFIX}scan • ` +
       `${PREFIX}throw [pb|gb|ub] • ${PREFIX}setthrow <pb|gb|ub> • ${PREFIX}dromon`
     );
+    return;
+  }
+
+  // Debug helpers
+  if (cmd === 'dexreload') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} mods/broadcaster only.`); return; }
+    dex = loadDex();
+    client.say(channel, `Dex reloaded: ${Array.isArray(dex.monsters)?dex.monsters.length:0} monsters.`);
+    return;
+  }
+  if (cmd === 'dexcount') {
+    const total = Array.isArray(dex.monsters) ? dex.monsters.length : 0;
+    const rs = Object.entries(dex.rarityWeights || {}).map(([k,v]) => `${k}:${v}`).join(' | ') || 'n/a';
+    client.say(channel, `Dex: ${total} monsters • rarity weights: ${rs}`);
     return;
   }
 
@@ -445,13 +494,12 @@ client.on('message', async (channel, tags, message, self) => {
     if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} only mods or the broadcaster can use ${PREFIX}spawn.`); return; }
     if (world.current) { client.say(channel, `@${username} a wild ${world.current.shiny ? '✨ ' : ''}${world.current.name}${world.current.shiny ? ' ✨' : ''} is already out. Use ${PREFIX}scan.`); return; }
     const s = spawnOne(channel);
-    if (!s) { client.say(channel, `@${username} spawn failed (no creatures in Dex?).`); return; }
-    // NEW message (no hint) for forced spawns too
+    if (!s) { client.say(channel, `@${username} spawn skipped — Dex is empty or invalid. Try ${PREFIX}dexreload (mods) or check server logs.`); return; }
     client.say(
       channel,
       `TwitchLit A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appears TwitchLit Catch it using !throw (winners revealed in ${Math.round(SPAWN_DESPAWN_SEC)}s)`
     );
-    // Optional: reset auto-spawn timer after a forced spawn
+    // reset auto-spawn timer after a forced spawn
     world.lastSpawnTs = Date.now();
     saveWorld();
     return;

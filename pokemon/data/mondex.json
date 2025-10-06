@@ -908,11 +908,11 @@
   }
 ],
   "rarityWeights": {
-  "Common": 7500,
-  "Uncommon": 2000,
-  "Rare": 440,
-  "Epic": 50,
-  "Legendary": 10
+  "Common": 5500,
+  "Uncommon": 2800,
+  "Rare": 900,
+  "Epic": 420,
+  "Legendary": 100
 },
   "balls": {
     "pokeball": {

@@ -96,9 +96,28 @@ function isBroadcaster(tags) {
 function isModOrBroadcaster(tags) {
   return Boolean(tags?.mod) || isBroadcaster(tags) || tags?.badges?.broadcaster === '1';
 }
+
+function ballFromAlias(s, fallback = 'pokeball') {
+  const t = uc(s);
+  if (t === 'pb' || t === 'pokeball') return 'pokeball';
+  if (t === 'gb' || t === 'greatball') return 'greatball';
+  if (t === 'ub' || t === 'ultraball') return 'ultraball';
+  return fallback;
+}
+
 function ensureUser(username) {
   const key = uc(username);
-  if (!users[key]) users[key] = { name: key, balls: { pokeball: 0, greatball: 0, ultraball: 0 }, lastDaily: 0, catches: [] };
+  if (!users[key]) {
+    users[key] = {
+      name: key,
+      balls: { pokeball: 0, greatball: 0, ultraball: 0 },
+      lastDaily: 0,
+      catches: [],
+      defaultBall: 'pokeball',
+    };
+  } else if (!users[key].defaultBall) {
+    users[key].defaultBall = 'pokeball';
+  }
   return users[key];
 }
 function pickWeighted(weightMap) {
@@ -127,7 +146,7 @@ function randomMonster() {
   const r = pickWeighted(dex.rarityWeights || { Common: 1 });
   const pool = mons.filter(m => m.rarity === r);
   if (!pool.length) return mons[Math.floor(Math.random() * mons.length)];
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(Math.random() * mons.length)];
 }
 
 function saveWorld() {
@@ -260,9 +279,13 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // Help
-  if (cmd === 'help' || cmd === 'monhelp') {
-    client.say(channel, `@${username} cmds: ${PREFIX}mon start • ${PREFIX}bag • ${PREFIX}daily • ${PREFIX}dex • ${PREFIX}throw <ball> • ${PREFIX}scan • ${PREFIX}dromon`);
+  // Help (renamed to pokehelp; keep !help alias)
+  if (cmd === 'help' || cmd === 'pokehelp') {
+    client.say(
+      channel,
+      `@${username} cmds: ${PREFIX}mon start • ${PREFIX}daily • ${PREFIX}bag • ${PREFIX}dex • ${PREFIX}scan • ` +
+      `${PREFIX}throw [pb|gb|ub] • ${PREFIX}setthrow <pb|gb|ub> • ${PREFIX}dromon`
+    );
     return;
   }
 
@@ -327,43 +350,63 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // Throw (no immediate reveal)
+  // Throw (aliases + default; no immediate reveal)
   if (cmd === 'throw') {
-    const ball = (args[0] || '').toLowerCase();
-    if (!['pokeball', 'greatball', 'ultraball'].includes(ball)) {
-      client.say(channel, `@${username} usage: ${PREFIX}throw pokeball|greatball|ultraball`);
+    const u = ensureUser(username);
+
+    // ball selection: arg alias, or user's default, fallback to pokeball
+    const argBall = (args[0] || '').toLowerCase();
+    const chosenBall = ballFromAlias(argBall || u.defaultBall || 'pokeball');
+
+    if (!['pokeball', 'greatball', 'ultraball'].includes(chosenBall)) {
+      client.say(channel, `@${username} usage: ${PREFIX}throw [pb|gb|ub] — set default with ${PREFIX}setthrow <pb|gb|ub>`);
       return;
     }
+
     if (!world.current) {
       client.say(channel, `@${username} there is no active encounter. Use ${PREFIX}scan and wait for a spawn.`);
       return;
     }
-    const u = ensureUser(username);
-    if ((u.balls[ball] || 0) <= 0) {
-      client.say(channel, `@${username} you have no ${ball}s. Check ${PREFIX}daily or ${PREFIX}bag.`);
+    if ((u.balls[chosenBall] || 0) <= 0) {
+      client.say(channel, `@${username} you have no ${chosenBall}s. Try ${PREFIX}daily or check ${PREFIX}bag.`);
       return;
     }
+
     // Spend ball
-    u.balls[ball] = (u.balls[ball] || 0) - 1;
+    u.balls[chosenBall] = (u.balls[chosenBall] || 0) - 1;
     saveJson(USERS_FILE, users);
 
     // Compute success
     const mon = (dex.monsters || []).find(x => x.id === world.current.id) || { catchRate: 0 };
-    const p = computeCatchChance(mon, ball, world.current.shiny);
+    const p = computeCatchChance(mon, chosenBall, world.current.shiny);
     const roll = Math.random();
     const success = roll < p;
 
-    world.current.attempts[uc(username)] = { ball, p, roll, success, ts: Date.now() };
+    world.current.attempts[uc(username)] = { ball: chosenBall, p, roll, success, ts: Date.now() };
     if (success) {
       world.current.caughtBy.add(uc(username));
-      // Persist success in user catches immediately (inventory), but don't announce
+      // store catch silently
       u.catches = u.catches || [];
       u.catches.push({ id: mon.id, name: mon.name, shiny: world.current.shiny, ts: Date.now() });
       saveJson(USERS_FILE, users);
     }
     saveWorld();
 
-    client.say(channel, `@${username} threw a ${ball}! Results will be revealed when the encounter ends.`);
+    client.say(channel, `@${username} threw a ${chosenBall}! Results will be revealed when the encounter ends.`);
+    return;
+  }
+
+  // Set default throw ball
+  if (cmd === 'setthrow') {
+    const u = ensureUser(username);
+    const choice = ballFromAlias(args[0], '');
+    if (!['pokeball', 'greatball', 'ultraball'].includes(choice)) {
+      client.say(channel, `@${username} usage: ${PREFIX}setthrow <pb|gb|ub>`);
+      return;
+    }
+    u.defaultBall = choice;
+    saveJson(USERS_FILE, users);
+    client.say(channel, `@${username} default throw set to ${choice}. Use ${PREFIX}throw to auto-use it.`);
     return;
   }
 
@@ -378,6 +421,9 @@ client.on('message', async (channel, tags, message, self) => {
       channel,
       `TwitchLit A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appears TwitchLit Catch it using !throw (winners revealed in ${Math.round(SPAWN_DESPAWN_SEC)}s)`
     );
+    // Optional: reset auto-spawn timer after a forced spawn
+    world.lastSpawnTs = Date.now();
+    saveWorld();
     return;
   }
 

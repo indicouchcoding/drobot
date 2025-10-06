@@ -97,6 +97,56 @@ function loadDex() {
     return { monsters: [], rarityWeights: {}, balls: {}, __reason: 'exception' };
   }
 }
+// --- One-time migration: /var/data/indicouch/dromon  ->  /data/dromon
+const OLD_DROMON_DIR = '/var/data/indicouch/dromon';
+const NEW_DROMON_DIR = DROMON_DATA_DIR; // should be "/data/dromon" via env
+
+function migrateDromonData() {
+  try {
+    if (!fs.existsSync(OLD_DROMON_DIR)) {
+      console.log('[DroMon] No old data dir to migrate:', OLD_DROMON_DIR);
+      return;
+    }
+    if (!fs.existsSync(NEW_DROMON_DIR)) fs.mkdirSync(NEW_DROMON_DIR, { recursive: true });
+
+    // Core files we care about
+    const core = ['users.json', 'world.json'];
+    let movedCore = 0;
+
+    for (const name of core) {
+      const src = path.join(OLD_DROMON_DIR, name);
+      const dst = path.join(NEW_DROMON_DIR, name);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) {
+        fs.copyFileSync(src, dst);
+        movedCore++;
+      }
+    }
+
+    // Grab any extra JSONs in case you add more later (won't overwrite)
+    let movedExtra = 0;
+    try {
+      const extras = fs.readdirSync(OLD_DROMON_DIR)
+        .filter(f => f.endsWith('.json') && !core.includes(f));
+      for (const f of extras) {
+        const src = path.join(OLD_DROMON_DIR, f);
+        const dst = path.join(NEW_DROMON_DIR, f);
+        if (fs.existsSync(src) && !fs.existsSync(dst)) {
+          fs.copyFileSync(src, dst);
+          movedExtra++;
+        }
+      }
+    } catch {}
+
+    if (movedCore || movedExtra) {
+      console.log(`[DroMon] Migrated ${movedCore} core + ${movedExtra} extra JSON file(s) from ${OLD_DROMON_DIR} -> ${NEW_DROMON_DIR}`);
+    } else {
+      console.log('[DroMon] Migration skipped: nothing new to move.');
+    }
+  } catch (e) {
+    console.error('[DroMon] Migration error:', e?.message || e);
+  }
+}
+migrateDromonData();
 
 let users = loadJson(USERS_FILE, {});
 let world  = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });

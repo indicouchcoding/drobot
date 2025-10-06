@@ -135,13 +135,13 @@
   {
     "id": 23,
     "name": "Ekans",
-    "rarity": "",
-    "catchRate": 0.1724
+    "rarity": "Common",
+    "catchRate": 1.1923
   },
   {
     "id": 24,
     "name": "Arbok",
-    "rarity": "",
+    "rarity": "Rare",
     "catchRate": 0.1724
   },
   {
@@ -405,7 +405,7 @@
   {
     "id": 68,
     "name": "Machamp",
-    "rarity": "",
+    "rarity": "Rare",
     "catchRate": 0.1724
   },
   {
@@ -441,19 +441,19 @@
   {
     "id": 74,
     "name": "Geodude",
-    "rarity": "",
-    "catchRate": 0.1724
+    "rarity": "Common",
+    "catchRate": 1.1923
   },
   {
     "id": 75,
     "name": "Graveler",
-    "rarity": "",
+    "rarity": "Uncommon",
     "catchRate": 0.1724
   },
   {
     "id": 76,
     "name": "Golem",
-    "rarity": "",
+    "rarity": "Rare",
     "catchRate": 0.1724
   },
   {
@@ -898,31 +898,31 @@
     "id": 150,
     "name": "Mewtwo",
     "rarity": "Legendary",
-    "catchRate": 0.1724
+    "catchRate": 0.0800
   },
   {
     "id": 151,
     "name": "Mew",
     "rarity": "Legendary",
-    "catchRate": 0.1747
+    "catchRate": 0.0890
   }
 ],
   "rarityWeights": {
-    "Common": 6500,
-    "Uncommon": 2600,
-    "Rare": 700,
-    "Epic": 180,
-    "Legendary": 20
-  },
+  "Common": 7500,
+  "Uncommon": 2000,
+  "Rare": 440,
+  "Epic": 50,
+  "Legendary": 10
+},
   "balls": {
     "pokeball": {
-      "bonus": 1.0
+      "bonus": 1.2
     },
     "greatball": {
-      "bonus": 1.5
+      "bonus": 1.8
     },
     "ultraball": {
-      "bonus": 2.0
+      "bonus": 2.4
     }
   }
 }

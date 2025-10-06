@@ -30,6 +30,36 @@ function saveJson(filePath, obj) {
     console.error('[DroMon] Save failed', filePath, e?.message || e);
   }
 }
+// --- One-time migration from repo folder -> persistent disk ---
+const OLD_DATA_DIR = path.join(HERE, 'data');
+function maybeMigrateOldSaves() {
+  try {
+    if (!fs.existsSync(DROMON_DATA_DIR)) fs.mkdirSync(DROMON_DATA_DIR, { recursive: true });
+
+    const oldUsers = path.join(OLD_DATA_DIR, 'users.json');
+    const oldWorld = path.join(OLD_DATA_DIR, 'world.json');
+
+    const newUsers = USERS_FILE;
+    const newWorld = WORLD_FILE;
+
+    // Only migrate if new files don't exist but old ones do
+    let moved = false;
+    if (!fs.existsSync(newUsers) && fs.existsSync(oldUsers)) {
+      fs.copyFileSync(oldUsers, newUsers);
+      moved = true;
+    }
+    if (!fs.existsSync(newWorld) && fs.existsSync(oldWorld)) {
+      fs.copyFileSync(oldWorld, newWorld);
+      moved = true;
+    }
+    if (moved) {
+      console.log('[DroMon] Migrated users/world from repo folder to persistent disk.');
+    }
+  } catch (e) {
+    console.error('[DroMon] Migration error:', e?.message || e);
+  }
+}
+maybeMigrateOldSaves();
 
 let users = loadJson(USERS_FILE, {});
 let world  = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });

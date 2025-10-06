@@ -3189,7 +3189,7 @@ client.on('message', async (channel, tags, message, self) => {
   switch (cmd) {
     case 'dro':
     case 'drobot': {
-      const intro = `Yo, I’m Dro_bot_ v0.0.9 — Indicouchgaming's Hub for CS2 Case Simulation and Pokemon TDC Simulation, use !help for a list of CS2 commands, !pokehelp for Pokemon Commands, This is all for Fun, Pure sim, no real skins/pokemon and most importantly, completely free! GLHF and Catch Em' All! ✨`;
+      const intro = `Yo, I’m Dro_bot_ v0.0.9 — Indicouchgaming's Hub for CS2 Case Simulation and Pokemon TCG Simulation, use !help for a list of CS2 commands, !pokehelp for Pokemon Commands, This is all for Fun, Pure sim, no real skins/pokemon and most importantly, completely free! GLHF and Catch Em' All! ✨`;
       client.say(channel, intro);
       break;
     }

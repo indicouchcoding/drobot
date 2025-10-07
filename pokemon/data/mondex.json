@@ -1886,9 +1886,7 @@
       ],
       "rarity": "Uncommon",
       "catchRate": 40
-    }
-  ]
-},
+    },
 {
   "id": 201,
   "name": "Unown",
@@ -4670,7 +4668,7 @@
     "types": [
       "Normal"
     ]
-  },
+  }
   
   ],
   "rarityWeights": {

@@ -337,7 +337,7 @@ function endSpawn(reason = 'despawn') {
     client.say(channel, `The wild ${monName} fled. No captures this time.`);
   } else {
     const list = caught.map(u => '@' + u).join(', ');
-    client.say(channel, `The wild ${monName} fled! Captured by: ${list}`);
+    client.say(channel, `The wild ${monName} attempted to flee, but was Captured by: ${list}`);
   }
 }
 

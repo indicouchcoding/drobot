@@ -1,44 +1,24 @@
 
-# DroMon (Community Creature Game)
+# DroMon pack (types + pretty !dex)
 
-Lightweight Twitch chat game inspired by community monster-catching games — **original creatures only** (no Nintendo/IP content). Ready to extend with your own data and overlay hooks.
+This pack includes:
+- `dromon.js` — drop-in replacement that:
+  - Shows a pretty `!dex` summary grouped by type with emojis.
+  - Adds `!dex list <type>` to list your caught mons of a given type.
+  - Adds `!fixtypes` (mods/broadcaster) to backfill canonical types into your dex (1–493) using PokéAPI.
+- `enrich_types.mjs` — a one-off script to add `"types": ["Fire", "Flying"]` etc. into your existing `data/mondex.json` **in-place**.
 
-## What it does
-- Spawns a random **wild creature** in chat every X minutes (rarity-weighted).
-- Viewers use `!throw pokeball|greatball|ultraball` (names are placeholders; rename if you want) to attempt a catch.
-- Shiny chance (default 1/1024). Per-species catch rates + ball bonuses.
-- `!dex` shows your personal Dex summary; `!bag` shows ball counts.
-- `!daily` grants a small pack of balls.
-- Mod tools: `!spawn` to force a spawn, `!giveballs @user 10 ultraball`, `!endspawn` to despawn.
+## How to use
+1) Replace your existing `dromon.js` with this one.
+2) Keep using your current `data/mondex.json` (the one you pasted me with ids 1–493).
+3) Either:
+   - Run `node enrich_types.mjs` once to permanently add canonical `types` to `mondex.json`, **or**
+   - Just run the bot and use `!fixtypes` (mods only). It will fill missing types and save them.
 
-## Commands
-- `!mon start` — create your save + receive a starter pack
-- `!bag` — see your balls
-- `!daily` — claim once per day
-- `!dex` — personal summary
-- `!throw pokeball` or `!throw greatball` or `!throw ultraball`
-- `!scan` — repeats current spawn info
-- `!help` — command list
+> Node 18+ is recommended (for global `fetch`).
 
-**Mods only**
-- `!spawn` — force a spawn now
-- `!endspawn` — despawn the current wild
-- `!giveballs @user 10 ultraball`
-- `!setrate shiny 2048` — set shiny rate denominator
+### Commands added
+- `!dex` → `Dex 123/493 • ✨7 • Types: 🔥F/💧W:12 | ...` (emoji shorthand per type; capped to avoid spam)
+- `!dex list <type>` → prints your caught mons for that type (e.g., `!dex list fire`)
+- `!fixtypes` → backfills types (1–493) from PokéAPI and saves to `mondex.json`
 
-## Setup
-1. `npm i`
-2. Copy `.env.example` → `.env` and set values.
-3. `npm run dev`
-
-## Env
-- `TWITCH_USERNAME`, `TWITCH_OAUTH` (from https://twitchapps.com/tmi/), `TWITCH_CHANNELS`
-- `PREFIX` (default `!`)
-- `SPAWN_INTERVAL_SEC` (default 300)
-- `SPAWN_DESPAWN_SEC` (default 180)
-- `SHINY_RATE_DENOM` (default 1024)
-
-## Notes
-- All data is stored in `data/` as JSON. Safe to delete during testing.
-- The included `mondex.json` has original example creatures. Replace with your own or expand it.
-- Overlay: add a tiny WebSocket server later so spawns pop visually on stream.

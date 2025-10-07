@@ -214,6 +214,60 @@ function computeCatchChance(mon, ballName, isShiny) {
 }
 
 /** =========================
+ *  Type helpers
+ *  ========================= */
+const TYPE_EMOJI = {
+  Normal: '⚪', Fire: '🔥', Water: '💧', Grass: '🌿', Electric: '⚡',
+  Ice: '❄️', Fighting: '🥊', Poison: '☠️', Ground: '🪨',
+  Flying: '🪽', Psychic: '🔮', Bug: '🐛', Rock: '🗿',
+  Ghost: '👻', Dragon: '🐉', Dark: '🌑', Steel: '⚙️', Fairy: '✨'
+};
+
+function typeBadge(types) {
+  const arr = Array.isArray(types) ? types : [];
+  return arr.map(t => `${TYPE_EMOJI[t] || '◻️'} ${t}`).join(' ');
+}
+
+// Fill missing "types" from PokéAPI (1–493). Safe to run multiple times.
+async function ensureCanonicalTypes(maxId = 493, batchDelayMs = 150) {
+  const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+  const missing = mons.filter(m => !Array.isArray(m.types) || m.types.length === 0);
+  if (!missing.length) return false;
+
+  async function fetchTypes(id) {
+    const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`, { headers: { 'accept': 'application/json' } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    const types = (j.types || [])
+      .sort((a,b) => (a.slot||0)-(b.slot||0))
+      .map(t => {
+        const s = String(t.type?.name || '');
+        return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+      });
+    return types;
+  }
+
+  const byId = new Map(mons.map(m => [Number(m.id), m]));
+  for (let id = 1; id <= maxId; id++) {
+    const m = byId.get(id);
+    if (!m) continue;
+    if (Array.isArray(m.types) && m.types.length) continue;
+    try {
+      const types = await fetchTypes(id);
+      if (types.length) {
+        m.types = types;
+        console.log(`[types] #${id} ${m.name} -> [${types.join(', ')}]`);
+        saveJson(DEX_FILE, dex);
+      }
+    } catch (e) {
+      console.warn(`[types] failed #${id} ${m?.name||''}:`, e?.message || e);
+    }
+    await new Promise(r => setTimeout(r, batchDelayMs));
+  }
+  return true;
+}
+
+/** =========================
  *  Utils
  *  ========================= */
 function uc(s) { return String(s || '').toLowerCase(); }
@@ -582,13 +636,60 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // Dex
+  // Dex (pretty summary + per-type listing)
   if (cmd === 'dex') {
     const u = ensureUser(username);
-    const total = (dex.monsters || []).length;
-    const caughtIds = new Set((u.catches || []).map(c => c.id));
-    const shinyCount = (u.catches || []).filter(c => c.shiny).length;
-    client.say(channel, `@${username} Dex → ${caughtIds.size}/${total} species • ${shinyCount} shinies.`);
+    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+    const byId = new Map(mons.map(m => [m.id, m]));
+    const caught = Array.isArray(u.catches) ? u.catches : [];
+    const total = mons.length;
+    const uniqueIds = new Set(caught.map(c => c.id));
+    const shinyCount = caught.filter(c => c.shiny).length;
+
+    // Build type counts
+    const typeCounts = {};
+    for (const id of uniqueIds) {
+      const mon = byId.get(id);
+      const types = Array.isArray(mon?.types) ? mon.types : [];
+      const k = types.join('/');
+      if (!k) continue;
+      typeCounts[k] = (typeCounts[k] || 0) + 1;
+    }
+    const summary = Object.entries(typeCounts)
+      .sort((a,b) => b[1]-a[1])
+      .slice(0, 10)
+      .map(([k,v]) => {
+        const badges = k.split('/').map(t => `${TYPE_EMOJI[t] || '◻️'}${t[0]}`).join('');
+        return `${badges}:${v}`;
+      });
+
+    client.say(channel, `@${username} Dex ${uniqueIds.size}/${total} • ✨${shinyCount} • Types: ${summary.join(' | ') || 'n/a'} • Use ${PREFIX}dex list <type> to list.`);
+    return;
+  }
+
+  if (cmd === 'dex' && args[0] === 'list') {
+    const u = ensureUser(username);
+    const typeArg = String(args[1] || '').toLowerCase();
+    if (!typeArg) { client.say(channel, `@${username} usage: ${PREFIX}dex list <type>`); return; }
+    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+    const byId = new Map(mons.map(m => [m.id, m]));
+    const caught = Array.isArray(u.catches) ? u.catches : [];
+    const names = [];
+    const cap = 40; // avoid spam
+    for (const c of caught) {
+      const mon = byId.get(c.id);
+      const types = (Array.isArray(mon?.types) ? mon.types : []).map(t => t.toLowerCase());
+      if (types.includes(typeArg)) {
+        names.push(mon.name + (c.shiny ? ' ✨' : ''));
+      }
+      if (names.length >= cap) break;
+    }
+    if (!names.length) {
+      client.say(channel, `@${username} you have no ${typeArg}-type entries yet.`);
+    } else {
+      const prettyType = typeArg.charAt(0).toUpperCase()+typeArg.slice(1);
+      sayChunks(client, channel, `${TYPE_EMOJI[prettyType]||'◻️'} ${prettyType}-types you’ve caught:`, names);
+    }
     return;
   }
 
@@ -604,7 +705,6 @@ client.on('message', async (channel, tags, message, self) => {
   if (cmd === 'throw') {
     const u = ensureUser(username);
 
-    // ball selection: arg alias, or user's default, fallback to pokeball
     const argBall = (args[0] || '').toLowerCase();
     const chosenBall = ballFromAlias(argBall || u.defaultBall || 'pokeball');
 
@@ -674,7 +774,6 @@ client.on('message', async (channel, tags, message, self) => {
       channel,
       `TwitchLit A wild ${s.shiny ? '✨ ' : ''}${s.name}${s.shiny ? ' ✨' : ''} appears TwitchLit Catch it using !throw (winners revealed in ${Math.round(SPAWN_DESPAWN_SEC)}s)`
     );
-    // reset auto-spawn timer after a forced spawn
     world.lastSpawnTs = Date.now();
     saveWorld();
     return;
@@ -742,4 +841,25 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
+  // === Types enrichment (mod) ===
+  if (cmd === 'fixtypes') {
+    if (!isModOrBroadcaster(tags)) {
+      client.say(channel, `@${username} mods/broadcaster only.`);
+      return;
+    }
+    client.say(channel, `@${username} filling missing types (1–493)…`);
+    try {
+      const changed = await ensureCanonicalTypes(493, 150);
+      client.say(channel, changed ? `Types check complete. Missing entries updated.` : `All entries already had types.`);
+    } catch (e) {
+      client.say(channel, `Types update failed: ${e?.message || e}`);
+    }
+    return;
+  }
+
 });
+
+// Background fill at startup (non-blocking)
+ensureCanonicalTypes(493, 200).then(changed => {
+  if (changed) console.log('[DroMon] Types were updated on startup.');
+}).catch(e => console.warn('[DroMon] ensureCanonicalTypes error:', e?.message || e));

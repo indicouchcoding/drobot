@@ -97,7 +97,8 @@ function loadDex() {
     return { monsters: [], rarityWeights: {}, balls: {}, __reason: 'exception' };
   }
 }
-// --- One-time migration: /var/data/indicouch/dromon  ->  /data/dromon
+
+// --- One-time migration: /var/data/indicouch/dromon  ->  /data/dromon (via env)
 const OLD_DROMON_DIR = '/var/data/indicouch/dromon';
 const NEW_DROMON_DIR = DROMON_DATA_DIR; // should be "/data/dromon" via env
 
@@ -356,10 +357,81 @@ const DROMON_INTRO_LINES = (p = PREFIX) => [
 ];
 
 /** =========================
+ *  Active chatter tracking (for reliable rain)
+ *  ========================= */
+const RECENT_CHATTERS = new Map(); // name -> lastSeenTs
+function markActive(name) {
+  RECENT_CHATTERS.set(String(name).toLowerCase(), Date.now());
+}
+function getRecentChatters(maxAgeMs = 15 * 60 * 1000) {
+  const now = Date.now();
+  const out = [];
+  for (const [name, ts] of RECENT_CHATTERS.entries()) {
+    if (now - ts <= maxAgeMs) out.push(name);
+  }
+  return out;
+}
+
+async function fetchChattersFor(channel) {
+  const chan = String(channel).replace(/^#/, '').toLowerCase();
+  const url = `https://tmi.twitch.tv/group/user/${chan}/chatters`;
+
+  let apiList = [];
+  try {
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (resp.ok) {
+      const data = await resp.json();
+      const groups = data?.chatters || {};
+      apiList = []
+        .concat(groups.broadcaster || [])
+        .concat(groups.vips || [])
+        .concat(groups.moderators || [])
+        .concat(groups.viewers || [])
+        .concat(groups.staff || [])
+        .concat(groups.admins || [])
+        .concat(groups.global_mods || []);
+    } else {
+      console.warn('[DroMon] chatters api HTTP', resp.status);
+    }
+  } catch (e) {
+    console.warn('[DroMon] chatters api failed:', e?.message || e);
+  }
+
+  // Union with local recent chatters
+  const recent = getRecentChatters();
+  const union = new Set(
+    apiList.map(u => u.toLowerCase()).concat(recent.map(u => u.toLowerCase()))
+  );
+
+  // Optional: filter out common utility bots
+  const BLACKLIST = new Set(['nightbot','streamelements','moobot']);
+  for (const b of BLACKLIST) union.delete(b);
+
+  return [...union];
+}
+
+async function giveAllBalls(channel, ball, amount) {
+  const valid = ['pokeball', 'greatball', 'ultraball'];
+  const b = String(ball).toLowerCase();
+  if (!valid.includes(b)) throw new Error('invalid ball');
+
+  const chatters = await fetchChattersFor(channel);
+  let given = 0;
+
+  for (const name of chatters) {
+    const u = ensureUser(name);
+    u.balls[b] = (u.balls[b] || 0) + amount;
+    given++;
+  }
+  if (given > 0) saveJson(USERS_FILE, users);
+  return { given, count: chatters.length };
+}
+
+/** =========================
  *  Twitch client
  *  ========================= */
 const client = new tmi.Client({
-  options: { skipUpdatingEmotesets: true },
+  options: { skipUpdatingEmotesets: true, joinMembership: true },
   connection: { secure: true, reconnect: true },
   identity: { username: process.env.TWITCH_USERNAME, password: process.env.TWITCH_OAUTH },
   channels: CHANNELS.map(c => '#' + c)
@@ -369,7 +441,11 @@ client.on('connected', (addr, port) => {
   console.log('[DroMon] Connected', addr, port);
 });
 client.on('join', (channel, username, self) => {
-  if (self) console.log('[DroMon] Joined', channel);
+  if (self) {
+    console.log('[DroMon] Joined', channel);
+  } else {
+    markActive(username);
+  }
 });
 
 await client.connect();
@@ -406,54 +482,16 @@ setInterval(() => {
 /** =========================
  *  Command handling
  *  ========================= */
-// === Chatters fetch + bulk give helper ===
-async function fetchChattersFor(channel) {
-  // channel is like "#indicouch" — strip "#"
-  const chan = String(channel).replace(/^#/, '').toLowerCase();
-  const url = `https://tmi.twitch.tv/group/user/${chan}/chatters`;
-  try {
-    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    const groups = data?.chatters || {};
-    const all = []
-      .concat(groups.broadcaster || [])
-      .concat(groups.vips || [])
-      .concat(groups.moderators || [])
-      .concat(groups.viewers || [])
-      .concat(groups.staff || [])
-      .concat(groups.admins || [])
-      .concat(groups.global_mods || []);
-    // De-dupe + lower-case
-    return [...new Set(all.map(u => u.toLowerCase()))];
-  } catch (e) {
-    console.error('[DroMon] fetchChattersFor failed:', e?.message || e);
-    return [];
-  }
-}
-
-async function giveAllBalls(channel, ball, amount) {
-  const valid = ['pokeball', 'greatball', 'ultraball'];
-  const b = String(ball).toLowerCase();
-  if (!valid.includes(b)) throw new Error('invalid ball');
-
-  const chatters = await fetchChattersFor(channel);
-  let given = 0;
-
-  for (const name of chatters) {
-    const u = ensureUser(name);
-    u.balls[b] = (u.balls[b] || 0) + amount;
-    given++;
-  }
-  if (given > 0) saveJson(USERS_FILE, users);
-  return { given, count: chatters.length };
-}
-
 client.on('message', async (channel, tags, message, self) => {
   if (self) return;
+
+  // track active users for rain union
+  const seenName = (tags['display-name'] || tags.username || 'user').toLowerCase();
+  markActive(seenName);
+
   if (!message.startsWith(PREFIX)) return;
 
-  const username = (tags['display-name'] || tags.username || 'user').toLowerCase();
+  const username = seenName;
   const parts = message.slice(PREFIX.length).trim().split(/\s+/);
   const cmd = (parts.shift() || '').toLowerCase();
   const args = parts;
@@ -683,25 +721,25 @@ client.on('message', async (channel, tags, message, self) => {
   }
 
   // === Ball rain commands ===
-if (cmd === 'rainpb' || cmd === 'raingb' || cmd === 'rainub') {
-  if (!isModOrBroadcaster(tags)) {
-    client.say(channel, `@${username} only mods or the broadcaster can use this.`);
+  if (cmd === 'rainpb' || cmd === 'raingb' || cmd === 'rainub') {
+    if (!isModOrBroadcaster(tags)) {
+      client.say(channel, `@${username} only mods or the broadcaster can use this.`);
+      return;
+    }
+    const ball = cmd === 'rainpb' ? 'pokeball' : cmd === 'raingb' ? 'greatball' : 'ultraball';
+    const amount = 10; // tweak if you want a different rain size
+    try {
+      const { given } = await giveAllBalls(channel, ball, amount);
+      if (given === 0) {
+        client.say(channel, `No chatters detected right now. Try again in a bit.`);
+      } else {
+        client.say(channel, `Ball rain! ☔️ Gave ${amount} ${ball}(s) to ${given} chatter(s). Enjoy!`);
+      }
+    } catch (e) {
+      console.error('[DroMon] rain cmd error:', e?.message || e);
+      client.say(channel, `Rain failed. Check logs.`);
+    }
     return;
   }
-  const ball = cmd === 'rainpb' ? 'pokeball' : cmd === 'raingb' ? 'greatball' : 'ultraball';
-  const amount = 10; // tweak if you want a different rain size
-  try {
-    const { given, count } = await giveAllBalls(channel, ball, amount);
-    if (given === 0) {
-      client.say(channel, `No chatters detected right now. Try again in a bit.`);
-    } else {
-      client.say(channel, `Ball rain! ☔️ Gave ${amount} ${ball}(s) to ${given} chatter(s). Enjoy!`);
-    }
-  } catch (e) {
-    console.error('[DroMon] rain cmd error:', e?.message || e);
-    client.say(channel, `Rain failed. Check logs.`);
-  }
-  return;
-}
 
 });

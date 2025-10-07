@@ -912,17 +912,17 @@
   "Uncommon": 3500,
   "Rare": 900,
   "Epic": 420,
-  "Legendary": 69
+  "Legendary": 50
 },
   "balls": {
     "pokeball": {
-      "bonus": 1.2
+      "bonus": 2.5
     },
     "greatball": {
-      "bonus": 1.8
+      "bonus": 3.2
     },
     "ultraball": {
-      "bonus": 2.4
+      "bonus": 4.8
     }
   }
 }

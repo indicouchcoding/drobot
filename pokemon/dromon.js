@@ -406,6 +406,49 @@ setInterval(() => {
 /** =========================
  *  Command handling
  *  ========================= */
+// === Chatters fetch + bulk give helper ===
+async function fetchChattersFor(channel) {
+  // channel is like "#indicouch" — strip "#"
+  const chan = String(channel).replace(/^#/, '').toLowerCase();
+  const url = `https://tmi.twitch.tv/group/user/${chan}/chatters`;
+  try {
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const groups = data?.chatters || {};
+    const all = []
+      .concat(groups.broadcaster || [])
+      .concat(groups.vips || [])
+      .concat(groups.moderators || [])
+      .concat(groups.viewers || [])
+      .concat(groups.staff || [])
+      .concat(groups.admins || [])
+      .concat(groups.global_mods || []);
+    // De-dupe + lower-case
+    return [...new Set(all.map(u => u.toLowerCase()))];
+  } catch (e) {
+    console.error('[DroMon] fetchChattersFor failed:', e?.message || e);
+    return [];
+  }
+}
+
+async function giveAllBalls(channel, ball, amount) {
+  const valid = ['pokeball', 'greatball', 'ultraball'];
+  const b = String(ball).toLowerCase();
+  if (!valid.includes(b)) throw new Error('invalid ball');
+
+  const chatters = await fetchChattersFor(channel);
+  let given = 0;
+
+  for (const name of chatters) {
+    const u = ensureUser(name);
+    u.balls[b] = (u.balls[b] || 0) + amount;
+    given++;
+  }
+  if (given > 0) saveJson(USERS_FILE, users);
+  return { given, count: chatters.length };
+}
+
 client.on('message', async (channel, tags, message, self) => {
   if (self) return;
   if (!message.startsWith(PREFIX)) return;
@@ -638,4 +681,27 @@ client.on('message', async (channel, tags, message, self) => {
     }
     return;
   }
+
+  // === Ball rain commands ===
+if (cmd === 'rainpb' || cmd === 'raingb' || cmd === 'rainub') {
+  if (!isModOrBroadcaster(tags)) {
+    client.say(channel, `@${username} only mods or the broadcaster can use this.`);
+    return;
+  }
+  const ball = cmd === 'rainpb' ? 'pokeball' : cmd === 'raingb' ? 'greatball' : 'ultraball';
+  const amount = 10; // tweak if you want a different rain size
+  try {
+    const { given, count } = await giveAllBalls(channel, ball, amount);
+    if (given === 0) {
+      client.say(channel, `No chatters detected right now. Try again in a bit.`);
+    } else {
+      client.say(channel, `Ball rain! ☔️ Gave ${amount} ${ball}(s) to ${given} chatter(s). Enjoy!`);
+    }
+  } catch (e) {
+    console.error('[DroMon] rain cmd error:', e?.message || e);
+    client.say(channel, `Rain failed. Check logs.`);
+  }
+  return;
+}
+
 });

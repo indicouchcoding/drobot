@@ -906,6 +906,606 @@
       "rarity": "Legendary",
       "catchRate": 3
     }
+    {
+  "id": 152,
+  "name": "Chikorita",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 153,
+  "name": "Bayleef",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 154,
+  "name": "Meganium",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 155,
+  "name": "Cyndaquil",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 156,
+  "name": "Quilava",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 157,
+  "name": "Typhlosion",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 158,
+  "name": "Totodile",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 159,
+  "name": "Croconaw",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 160,
+  "name": "Feraligatr",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 161,
+  "name": "Sentret",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 162,
+  "name": "Furret",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 163,
+  "name": "Hoothoot",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 164,
+  "name": "Noctowl",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 165,
+  "name": "Ledyba",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 166,
+  "name": "Ledian",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 167,
+  "name": "Spinarak",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 168,
+  "name": "Ariados",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 169,
+  "name": "Crobat",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 170,
+  "name": "Chinchou",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 171,
+  "name": "Lanturn",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 172,
+  "name": "Pichu",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 173,
+  "name": "Cleffa",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 174,
+  "name": "Igglybuff",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 175,
+  "name": "Togepi",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 176,
+  "name": "Togetic",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 177,
+  "name": "Natu",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 178,
+  "name": "Xatu",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 179,
+  "name": "Mareep",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 180,
+  "name": "Flaaffy",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 181,
+  "name": "Ampharos",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 182,
+  "name": "Bellossom",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 183,
+  "name": "Marill",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 184,
+  "name": "Azumarill",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 185,
+  "name": "Sudowoodo",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 186,
+  "name": "Politoed",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 187,
+  "name": "Hoppip",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 188,
+  "name": "Skiploom",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 189,
+  "name": "Jumpluff",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 190,
+  "name": "Aipom",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 191,
+  "name": "Sunkern",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 192,
+  "name": "Sunflora",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 193,
+  "name": "Yanma",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 194,
+  "name": "Wooper",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 195,
+  "name": "Quagsire",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 196,
+  "name": "Espeon",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 197,
+  "name": "Umbreon",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 198,
+  "name": "Murkrow",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 199,
+  "name": "Slowking",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 200,
+  "name": "Misdreavus",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 201,
+  "name": "Unown",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 202,
+  "name": "Wobbuffet",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 203,
+  "name": "Girafarig",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 204,
+  "name": "Pineco",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 205,
+  "name": "Forretress",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 206,
+  "name": "Dunsparce",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 207,
+  "name": "Gligar",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 208,
+  "name": "Steelix",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 209,
+  "name": "Snubbull",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 210,
+  "name": "Granbull",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 211,
+  "name": "Qwilfish",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 212,
+  "name": "Scizor",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 213,
+  "name": "Shuckle",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 214,
+  "name": "Heracross",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 215,
+  "name": "Sneasel",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 216,
+  "name": "Teddiursa",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 217,
+  "name": "Ursaring",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 218,
+  "name": "Slugma",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 219,
+  "name": "Magcargo",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 220,
+  "name": "Swinub",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 221,
+  "name": "Piloswine",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 222,
+  "name": "Corsola",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 223,
+  "name": "Remoraid",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 224,
+  "name": "Octillery",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 225,
+  "name": "Delibird",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 226,
+  "name": "Mantine",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 227,
+  "name": "Skarmory",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 228,
+  "name": "Houndour",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 229,
+  "name": "Houndoom",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 230,
+  "name": "Kingdra",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 231,
+  "name": "Phanpy",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 232,
+  "name": "Donphan",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 233,
+  "name": "Porygon2",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 234,
+  "name": "Stantler",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 235,
+  "name": "Smeargle",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 236,
+  "name": "Tyrogue",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 237,
+  "name": "Hitmontop",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 238,
+  "name": "Smoochum",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 239,
+  "name": "Elekid",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 240,
+  "name": "Magby",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 241,
+  "name": "Miltank",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 242,
+  "name": "Blissey",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 243,
+  "name": "Raikou",
+  "rarity": "Legendary",
+  "catchRate": 8
+},
+{
+  "id": 244,
+  "name": "Entei",
+  "rarity": "Legendary",
+  "catchRate": 8
+},
+{
+  "id": 245,
+  "name": "Suicune",
+  "rarity": "Legendary",
+  "catchRate": 8
+},
+{
+  "id": 246,
+  "name": "Larvitar",
+  "rarity": "Common",
+  "catchRate": 70
+},
+{
+  "id": 247,
+  "name": "Pupitar",
+  "rarity": "Uncommon",
+  "catchRate": 40
+},
+{
+  "id": 248,
+  "name": "Tyranitar",
+  "rarity": "Rare",
+  "catchRate": 15
+},
+{
+  "id": 249,
+  "name": "Lugia",
+  "rarity": "Legendary",
+  "catchRate": 8
+},
+{
+  "id": 250,
+  "name": "Ho-Oh",
+  "rarity": "Legendary",
+  "catchRate": 8
+},
+{
+  "id": 251,
+  "name": "Celebi",
+  "rarity": "Legendary",
+  "catchRate": 8
+}
   ],
   "rarityWeights": {
     "Common": 8000,

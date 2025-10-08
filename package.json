@@ -1,18 +1,23 @@
 {
-  "name": "indicouch-case-bot",
-  "version": "0.4.29",
+  "name": "drobot",
+  "version": "0.4.30",
+  "private": true,
   "type": "module",
-  "main": "indicouch-case-bot.js",
-  "engines": { "node": ">=22 <23" },
+  "description": "Indicouch Twitch bots (drobot + DroMon)",
   "scripts": {
-    "start": "node indicouch-case-bot.js",
+    "start": "npm run start:both",
+    "start:both": "concurrently -k -n drobot,dromon -c auto \"node indicouch-case-bot.js\" \"node pokemon/dromon.js\"",
     "start:drobot": "node indicouch-case-bot.js",
-    "start:dromon": "node pokemon/dromon.js",
-    "start:both": "concurrently -k -n drobot,dromon -c auto \"node indicouch-case-bot.js\" \"node pokemon/dromon.js\""
+    "start:dromon": "node pokemon/dromon.js"
   },
   "dependencies": {
+    "concurrently": "^8.2.2",
     "dotenv": "^16.4.5",
-    "tmi.js": "^1.8.5",
-    "concurrently": "^9.1.0"
-  }
+    "express": "^4.19.2",
+    "tmi.js": "^1.8.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
 }

@@ -619,7 +619,7 @@ const server = http.createServer((req, res) => {
     if (!cur) return sendJSON(res, { active: false });
 
     const id = String(cur.id).padStart(3, '0');
-    const base = cur.shiny ? f`${id}_shiny.png` : f`${id}.png`;
+    const base = cur.shiny ? `${id}_shiny.png` : `${id}.png`;
     const endsIn = Math.max(0, Math.ceil((cur.endsAt - Date.now()) / 1000));
     const mon = (dex.monsters || []).find(x => x.id === cur.id) || {};
     return sendJSON(res, {
@@ -640,14 +640,14 @@ const server = http.createServer((req, res) => {
     res.writeHead(404); return res.end('Not found');
   }
 
-  if (pathname === '/overlay' or pathname === '/overlay/') {
+  if (pathname === '/overlay' || pathname === '/overlay/') {
     const abs = join(OVERLAY_DIR, 'index.html');
     if (existsSync(abs)) return sendFile(res, abs);
     res.writeHead(404); return res.end('Missing overlay index.html');
   }
   if (pathname.startsWith('/overlay/')) {
     const p = pathname.replace('/overlay/', '');
-    const abs = join(OVERLAY_DIR, p or 'index.html');
+    const abs = join(OVERLAY_DIR, p || 'index.html');
     if (existsSync(abs)) return sendFile(res, abs);
     res.writeHead(404); return res.end('Not found');
   }

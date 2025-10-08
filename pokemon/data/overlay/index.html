@@ -1,26 +1,29 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>DroMon Overlay</title>
-    <link rel="stylesheet" href="./overlay.css">
-  </head>
-  <body>
-    <div id="overlay-root" class="hidden">
-      <div id="card" class="pop">
-        <img id="spawn-img" alt="spawn" />
-        <div class="info">
-          <div class="name-row">
-            <span id="name"></span>
-            <span id="rarity" class="badge"></span>
-            <span id="shiny" class="badge shiny">✨ SHINY</span>
-          </div>
-          <div id="types" class="types"></div>
-          <div id="timer" class="timer"></div>
-        </div>
-      </div>
-    </div>
-    <script src="./overlay.js"></script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DroMon Overlay</title>
+  <style>
+    html, body { margin:0; padding:0; background:transparent; overflow:hidden; }
+    .wrap { position:relative; width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+    #sprite { max-width:40vw; max-height:80vh; image-rendering:auto; }
+    .label {
+      position:absolute; bottom:4vh; left:50%; transform:translateX(-50%);
+      font: 700 2.6vh/1.2 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:white; background: rgba(0,0,0,.55); padding: .8vh 1.2vh; border-radius: .8vh;
+      text-shadow: 0 1px 2px rgba(0,0,0,.9);
+      white-space:nowrap;
+    }
+    .hidden { opacity:0; transition: opacity .25s ease; }
+    .visible { opacity:1; transition: opacity .25s ease; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <img id="sprite" class="hidden" alt="spawn" />
+    <div id="label" class="label hidden"></div>
+  </div>
+  <script src="./overlay.js"></script>
+</body>
 </html>

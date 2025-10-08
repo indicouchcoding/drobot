@@ -601,7 +601,7 @@ function sendFile(res, absPath) {
   const ext = extname(absPath).toLowerCase();
   const mime =
     ext === '.png' ? 'image/png' :
-    ext === '.jpg' or ext === '.jpeg' ? 'image/jpeg' :
+    ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
     ext === '.gif' ? 'image/gif' :
     ext === '.js' ? 'text/javascript; charset=utf-8' :
     ext === '.css' ? 'text/css; charset=utf-8' :

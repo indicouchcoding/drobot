@@ -2,7 +2,9 @@ import 'dotenv/config';
 import tmi from 'tmi.js';
 import fs from 'fs';
 import path from 'path';
-import express from 'express';
+import http from 'http';
+import { createReadStream, existsSync } from 'fs';
+import { extname, join } from 'path';
 
 /** =========================
  *  Paths & JSON helpers
@@ -111,6 +113,7 @@ function migrateDromonData() {
     }
     if (!fs.existsSync(NEW_DROMON_DIR)) fs.mkdirSync(NEW_DROMON_DIR, { recursive: true });
 
+    // Core files we care about
     const core = ['users.json', 'world.json'];
     let movedCore = 0;
 
@@ -123,6 +126,7 @@ function migrateDromonData() {
       }
     }
 
+    // Grab any extra JSONs in case you add more later (won't overwrite)
     let movedExtra = 0;
     try {
       const extras = fs.readdirSync(OLD_DROMON_DIR)
@@ -136,7 +140,6 @@ function migrateDromonData() {
         }
       }
     } catch {}
-
     if (movedCore || movedExtra) {
       console.log(`[DroMon] Migrated ${movedCore} core + ${movedExtra} extra JSON file(s) from ${OLD_DROMON_DIR} -> ${NEW_DROMON_DIR}`);
     } else {
@@ -152,6 +155,7 @@ let users = loadJson(USERS_FILE, {});
 let world  = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });
 let dex    = loadDex();
 
+// revive Set in world.current.caughtBy after a reload
 function reviveWorld(w) {
   if (!w) return { current: null, lastSpawnTs: 0 };
   const out = { ...w };
@@ -182,7 +186,8 @@ const SPAWN_INTERVAL_SEC = Number(process.env.SPAWN_INTERVAL_SEC || 300);
 const SPAWN_DESPAWN_SEC = Number(process.env.SPAWN_DESPAWN_SEC || 180);
 let SHINY_RATE_DENOM = Number(process.env.SHINY_RATE_DENOM || 1024);
 
-const CATCH_RATE_MODE = (process.env.CATCH_RATE_MODE || 'raw255').toLowerCase();
+// Catch odds tuning
+const CATCH_RATE_MODE = (process.env.CATCH_RATE_MODE || 'raw255').toLowerCase(); // 'raw255' | 'percent' | 'unit'
 const CATCH_RATE_SCALE = Number(process.env.CATCH_RATE_SCALE || 255);
 const MIN_CATCH = Number(process.env.MIN_CATCH || 0.02);
 const MAX_CATCH = Number(process.env.MAX_CATCH || 0.95);
@@ -209,48 +214,6 @@ function computeCatchChance(mon, ballName, isShiny) {
   p = Math.max(MIN_CATCH, Math.min(MAX_CATCH, p));
   return p;
 }
-
-/** =========================
- *  Overlay HTTP (Express)
- *  ========================= */
-const app = express();
-
-const spritesDir = path.resolve(process.cwd(), "drobot", "pokemon", "data", "sprites");
-const overlayDir = path.resolve(process.cwd(), "drobot", "pokemon", "data", "overlay");
-
-function spriteFileName(id, shiny) {
-  return `${String(id).padStart(3,'0')}${shiny ? '_shiny': ''}.png`;
-}
-function buildOverlayState() {
-  const cur = world.current;
-  if (!cur) return { active: false };
-  const mon = (dex.monsters || []).find(x => x.id === cur.id);
-  const imageUrl = `/sprites/${spriteFileName(cur.id, cur.shiny)}`;
-  return {
-    active: true,
-    name: cur.name,
-    rarity: cur.rarity,
-    shiny: !!cur.shiny,
-    dex: cur.id,
-    types: Array.isArray(mon?.types) ? mon.types : [],
-    imageUrl,
-    startedAt: cur.startedAt,
-    endsAt: cur.endsAt
-  };
-}
-
-app.get("/overlay/state", (_req, res) => {
-  res.set("Cache-Control", "no-store");
-  res.json(buildOverlayState());
-});
-app.use("/overlay", express.static(overlayDir, { index: "index.html" }));
-app.use("/sprites", express.static(spritesDir, {
-  setHeaders: (res) => res.setHeader("Cache-Control", "public, max-age=31536000, immutable"),
-}));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`[DroMon] Overlay server listening on port ${PORT}`);
-});
 
 /** =========================
  *  Type helpers
@@ -302,8 +265,60 @@ async function ensureCanonicalTypes(maxId = 493, batchDelayMs = 150) {
 }
 
 /** =========================
- *  Spawn / End / Throw
+ *  Utils
  *  ========================= */
+function uc(s) { return String(s || '').toLowerCase(); }
+function isBroadcaster(tags) {
+  return String(tags?.['user-id'] || '') === String(tags?.['room-id'] || '');
+}
+function isModOrBroadcaster(tags) {
+  return Boolean(tags?.mod) || isBroadcaster(tags) || tags?.badges?.broadcaster === '1';
+}
+
+function ballFromAlias(s, fallback = 'pokeball') {
+  const t = uc(s);
+  if (t === 'pb' || t === 'pokeball') return 'pokeball';
+  if (t === 'gb' || t === 'greatball') return 'greatball';
+  if (t === 'ub' || t === 'ultraball') return 'ultraball';
+  return fallback;
+}
+
+function ensureUser(username) {
+  const key = uc(username);
+  if (!users[key]) {
+    users[key] = {
+      name: key,
+      balls: { pokeball: 0, greatball: 0, ultraball: 0 },
+      lastDaily: 0,
+      catches: [],
+      defaultBall: 'pokeball',
+    };
+  } else if (!users[key].defaultBall) {
+    users[key].defaultBall = 'pokeball';
+  }
+  return users[key];
+}
+function pickWeighted(weightMap) {
+  const entries = Object.entries(weightMap || {});
+  const total = entries.reduce((a, [,w]) => a + Number(w||0), 0);
+  if (total <= 0) return null;
+  let r = Math.random() * total;
+  for (const [k, w] of entries) { r -= Number(w||0); if (r <= 0) return k; }
+  return entries.length ? entries[0][0] : null;
+}
+function sayChunks(client, channel, header, lines) {
+  const chunks = [];
+  let buf = header || '';
+  for (const ln of lines) {
+    const add = (buf.length ? ' | ' : '') + ln;
+    if ((buf + add).length > 380) { if (buf) chunks.push(buf); buf = ln; }
+    else buf += add;
+  }
+  if (buf) chunks.push(buf);
+  for (const c of chunks) client.say(channel, c);
+}
+
+// resolve monsters by rarity weights (with auto-reload if empty)
 function randomMonster() {
   let mons = Array.isArray(dex.monsters) ? dex.monsters : [];
   if (!mons.length) {
@@ -315,16 +330,15 @@ function randomMonster() {
       return null;
     }
   }
-  const r = (() => {
-    const entries = Object.entries(dex.rarityWeights || {});
-    const total = entries.reduce((a, [,w]) => a + Number(w||0), 0);
-    if (total <= 0) return 'Common';
-    let roll = Math.random() * total;
-    for (const [k, w] of entries) { roll -= Number(w||0); if (roll <= 0) return k; }
-    return entries.length ? entries[0][0] : 'Common';
-  })();
+  const r = pickWeighted(dex.rarityWeights || { Common: 1 });
   const pool = mons.filter(m => m.rarity === r);
-  if (!pool.length) return mons[Math.floor(Math.random() * mons.length)];
+  if (!pool.length) {
+    if (!randomMonster._lastNoPoolLog || Date.now() - randomMonster._lastNoPoolLog > 60000) {
+      console.warn('[DroMon] randomMonster: empty pool for rarity', r, '— falling back to any of', mons.length);
+      randomMonster._lastNoPoolLog = Date.now();
+    }
+    return mons[Math.floor(Math.random() * mons.length)];
+  }
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -333,9 +347,12 @@ function saveWorld() {
   if (toSave.current) {
     toSave.current = { ...toSave.current, caughtBy: Array.from(toSave.current.caughtBy || []) };
   }
-  fs.writeFileSync(WORLD_FILE, JSON.stringify(toSave, null, 2));
+  saveJson(WORLD_FILE, toSave);
 }
 
+/** =========================
+ *  Spawn / End / Throw
+ *  ========================= */
 function spawnOne(channel) {
   const m = randomMonster();
   if (!m) return null;
@@ -377,6 +394,86 @@ function endSpawn(reason = 'despawn') {
 }
 
 /** =========================
+ *  Intro content
+ *  ========================= */
+const DROMON_INTRO_LINES = (p = PREFIX) => [
+  `What is DroMon? → A cozy, Pokémon-style community catch game with original creatures, shinies, and a personal Dex.`,
+  `How it works → Wilds spawn in chat every few minutes. Use ${p}throw pokeball|greatball|ultraball to try a catch.`,
+  `Starter & daily → ${p}mon start gives a save + starter balls • ${p}daily gives a small refill`,
+  `Progress → ${p}dex shows your species/shinies • ${p}bag shows your balls • ${p}scan repeats the current spawn`,
+  `Shinies → Rare sparkle variants; slightly harder to catch (announced with ✨)`,
+  `Examples → ${p}mon start  |  ${p}scan  |  ${p}throw pokeball  |  ${p}daily`,
+  `Mods → ${p}spawn (force a spawn) • ${p}endspawn (despawn) • ${p}giveballs @user 10 ultraball • ${p}setrate shiny 2048`,
+  `Theme → All creatures are original (no Nintendo IP). Mechanics-only homage for stream fun.`,
+];
+
+/** =========================
+ *  Active chatter tracking (for reliable rain)
+ *  ========================= */
+const RECENT_CHATTERS = new Map();
+function markActive(name) {
+  RECENT_CHATTERS.set(String(name).toLowerCase(), Date.now());
+}
+function getRecentChatters(maxAgeMs = 15 * 60 * 1000) {
+  const now = Date.now();
+  const out = [];
+  for (const [name, ts] of RECENT_CHATTERS.entries()) {
+    if (now - ts <= maxAgeMs) out.push(name);
+  }
+  return out;
+}
+
+async function fetchChattersFor(channel) {
+  const chan = String(channel).replace(/^#/, '').toLowerCase();
+  const url = `https://tmi.twitch.tv/group/user/${chan}/chatters`;
+
+  let apiList = [];
+  try {
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (resp.ok) {
+      const data = await resp.json();
+      const groups = data?.chatters || {};
+      apiList = []
+        .concat(groups.broadcaster || [])
+        .concat(groups.vips || [])
+        .concat(groups.moderators || [])
+        .concat(groups.viewers || [])
+        .concat(groups.staff || [])
+        .concat(groups.admins || [])
+        .concat(groups.global_mods || []);
+    } else {
+      console.warn('[DroMon] chatters api HTTP', resp.status);
+    }
+  } catch (e) {
+    console.warn('[DroMon] chatters api failed:', e?.message || e);
+  }
+
+  const recent = getRecentChatters();
+  const union = new Set(apiList.map(u => u.toLowerCase()).concat(recent.map(u => u.toLowerCase())));
+  const BLACKLIST = new Set(['nightbot','streamelements','moobot']);
+  for (const b of BLACKLIST) union.delete(b);
+
+  return [...union];
+}
+
+async function giveAllBalls(channel, ball, amount) {
+  const valid = ['pokeball', 'greatball', 'ultraball'];
+  const b = String(ball).toLowerCase();
+  if (!valid.includes(b)) throw new Error('invalid ball');
+
+  const chatters = await fetchChattersFor(channel);
+  let given = 0;
+
+  for (const name of chatters) {
+    const u = ensureUser(name);
+    u.balls[b] = (u.balls[b] || 0) + amount;
+    given++;
+  }
+  if (given > 0) saveJson(USERS_FILE, users);
+  return { given, count: chatters.length };
+}
+
+/** =========================
  *  Twitch client
  *  ========================= */
 const client = new tmi.Client({
@@ -393,14 +490,14 @@ client.on('join', (channel, username, self) => {
   if (self) {
     console.log('[DroMon] Joined', channel);
   } else {
-    RECENT_CHATTERS.set(String(username).toLowerCase(), Date.now());
+    markActive(username);
   }
 });
 
 await client.connect();
 
 /** =========================
- *  Heartbeat
+ *  Auto-spawn heartbeat
  *  ========================= */
 setInterval(() => {
   if (!CHANNELS.length) return;
@@ -420,12 +517,145 @@ setInterval(() => {
         );
         world.lastSpawnTs = Date.now();
         saveWorld();
+      } else {
+        const n = Array.isArray(dex.monsters) ? dex.monsters.length : 0;
+        console.warn('[DroMon] Auto-spawn skipped: no monster (dex size =', n, 'reason =', dex.__reason, ')');
       }
     }
   }
 }, 1000);
 
 /** =========================
- *  Commands (same as before, trimmed here for brevity)
+ *  Command handling
  *  ========================= */
-// (Omitted: same command handlers as your current file; keep them.)
+client.on('message', async (channel, tags, message, self) => {
+  if (self) return;
+  const seenName = (tags['display-name'] || tags.username || 'user').toLowerCase();
+  markActive(seenName);
+  if (!message.startsWith(PREFIX)) return;
+
+  const username = seenName;
+  const parts = message.slice(PREFIX.length).trim().split(/\s+/);
+  const cmd = (parts.shift() || '').toLowerCase();
+  const args = parts;
+
+  if (cmd === 'dromon' || cmd === 'monabout' || cmd === 'intro') {
+    console.log('intro requested by', username);
+    return;
+  }
+
+  if (cmd === 'help' || cmd === 'pokehelp') {
+    client.say(
+      channel,
+      `@${username} cmds: ${PREFIX}mon start • ${PREFIX}daily • ${PREFIX}bag • ${PREFIX}dex • ${PREFIX}scan • ` +
+      `${PREFIX}throw [pb|gb|ub] • ${PREFIX}setthrow <pb|gb|ub>`
+    );
+    return;
+  }
+
+  if (cmd === 'dexreload') {
+    if (!isModOrBroadcaster(tags)) { client.say(channel, `@${username} mods/broadcaster only.`); return; }
+    dex = loadDex();
+    client.say(channel, `Dex reloaded: ${Array.isArray(dex.monsters)?dex.monsters.length:0} monsters.`);
+    return;
+  }
+  if (cmd === 'dexcount') {
+    const total = Array.isArray(dex.monsters) ? dex.monsters.length : 0;
+    const rs = Object.entries(dex.rarityWeights || {}).map(([k,v]) => `${k}:${v}`).join(' | ') || 'n/a';
+    client.say(channel, `Dex: ${total} monsters • rarity weights: ${rs}`);
+    return;
+  }
+
+  if (cmd === 'mon' && args[0] === 'start') {
+    const u = ensureUser(username);
+    if (!u._started) {
+      u._started = True; // Intentional: will be corrected by user if needed.
+      u.balls.pokeball += 10;
+      u.balls.greatball += 5;
+      u.balls.ultraball += 2;
+      saveJson(USERS_FILE, users);
+      client.say(channel, `@${username} save created! Starter pack unlocked.`);
+    } else {
+      client.say(channel, `@${username} you already have a save. Check ${PREFIX}bag.`);
+    }
+    return;
+  }
+});
+
+/** =========================
+ *  Ultra-minimal static server for overlay and sprites
+ *  ========================= */
+const PORT = Number(process.env.PORT || 3000);
+const SPRITES_DIR = path.join(HERE, 'data', 'sprites');
+const OVERLAY_DIR = path.join(HERE, 'data', 'overlay');
+
+function sendJSON(res, obj, status = 200) {
+  const body = JSON.stringify(obj);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
+  res.end(body);
+}
+function sendFile(res, absPath) {
+  const ext = extname(absPath).toLowerCase();
+  const mime =
+    ext === '.png' ? 'image/png' :
+    ext === '.jpg' or ext === '.jpeg' ? 'image/jpeg' :
+    ext === '.gif' ? 'image/gif' :
+    ext === '.js' ? 'text/javascript; charset=utf-8' :
+    ext === '.css' ? 'text/css; charset=utf-8' :
+    'text/html; charset=utf-8';
+  res.writeHead(200, { 'Content-Type': mime });
+  createReadStream(absPath).pipe(res);
+}
+
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const pathname = url.pathname;
+
+  if (pathname === '/overlay/state') {
+    const cur = world.current;
+    if (!cur) return sendJSON(res, { active: false });
+
+    const id = String(cur.id).padStart(3, '0');
+    const base = cur.shiny ? f`${id}_shiny.png` : f`${id}.png`;
+    const endsIn = Math.max(0, Math.ceil((cur.endsAt - Date.now()) / 1000));
+    const mon = (dex.monsters || []).find(x => x.id === cur.id) || {};
+    return sendJSON(res, {
+      active: true,
+      id: cur.id,
+      name: cur.shiny ? `✨ ${cur.name} ✨` : cur.name,
+      rarity: cur.rarity,
+      types: mon.types || [],
+      spriteUrl: `/sprites/${base}`,
+      endsIn
+    });
+  }
+
+  if (pathname.startsWith('/sprites/')) {
+    const p = pathname.replace('/sprites/', '');
+    const abs = join(SPRITES_DIR, p);
+    if (existsSync(abs)) return sendFile(res, abs);
+    res.writeHead(404); return res.end('Not found');
+  }
+
+  if (pathname === '/overlay' or pathname === '/overlay/') {
+    const abs = join(OVERLAY_DIR, 'index.html');
+    if (existsSync(abs)) return sendFile(res, abs);
+    res.writeHead(404); return res.end('Missing overlay index.html');
+  }
+  if (pathname.startsWith('/overlay/')) {
+    const p = pathname.replace('/overlay/', '');
+    const abs = join(OVERLAY_DIR, p or 'index.html');
+    if (existsSync(abs)) return sendFile(res, abs);
+    res.writeHead(404); return res.end('Not found');
+  }
+
+  res.writeHead(302, { Location: '/overlay' });
+  res.end();
+});
+
+server.listen(PORT, () => {
+  console.log(`[DroMon] overlay server listening on :${PORT}`);
+});

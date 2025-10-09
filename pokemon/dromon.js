@@ -852,7 +852,7 @@ client.on('message', async (channel, tags, message, self) => {
       const mon = byId.get(c.id);
       const types = (Array.isArray(mon?.types) ? mon.types : []).map(t => t.toLowerCase());
       if (types.includes(typeArg)) {
-        names.push(mon.name + (c.shiny ? ' ✨' : ''));
+        names.push(`${mon.name} (#${mon?.id ?? c.id ?? '??'})${c.shiny ? ' ✨' : ''}`);
       }
       if (names.length >= cap) break;
     }

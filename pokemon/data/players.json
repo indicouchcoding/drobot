@@ -1,0 +1,18 @@
+{
+  "sample_user": {
+    "mons": [
+      {
+        "iid": "A1B2C3D4",
+        "name": "Bulbasaur",
+        "level": 5,
+        "rarity": "common"
+      },
+      {
+        "iid": "E5F6G7H8",
+        "name": "Charmander",
+        "level": 5,
+        "rarity": "common"
+      }
+    ]
+  }
+}

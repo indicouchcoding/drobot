@@ -721,13 +721,31 @@ client.on('message', async (channel, tags, message, self) => {
       }
 
       if (sub === 'add') {
-        const iid = args[1];
-        if (!iid) { client.say(channel, `Usage: ${PREFIX}trade add <iid>`); return; }
+
+        const token = args[1];
+        if (!token) { client.say(channel, `Usage: ${PREFIX}trade add <iid|dex#>`); return; }
         const t = findActiveTradeFor(me, db);
         if (!t) { client.say(channel, `No active trade. Start with ${PREFIX}trade @user`); return; }
         const side = (t.a.id === me) ? 'a' : (t.b.id === me) ? 'b' : null;
         if (!side) { client.say(channel, `You are not part of this trade.`); return; }
         const inv = getUserMonsInventory(me);
+
+        // Support adding by IID or by Dex number (if unique)
+        let iid = token.trim();
+        if (/^\d+$/.test(iid)) {
+          const dexId = parseInt(iid, 10);
+          const candidates = inv.filter(m => Number(m.id) === dexId);
+          if (candidates.length === 1) {
+            iid = candidates[0].iid;
+          } else if (candidates.length > 1) {
+            client.say(channel, `You have multiple #${dexId}. Use one of these iids: ${candidates.map(m => m.iid).join(', ')}`);
+            return;
+          } else {
+            client.say(channel, `You do not own #${dexId}.`);
+            return;
+          }
+        }
+
         const mon = inv.find(m => m.iid === iid);
         if (!mon) { client.say(channel, `You do not own a mon with id ${iid}.`); return; }
         if (mon.lockedBy && mon.lockedBy !== t.id) { client.say(channel, `That mon is locked by another trade.`); return; }
@@ -739,7 +757,7 @@ client.on('message', async (channel, tags, message, self) => {
         saveTrades(db);
         client.say(channel, renderTradeSummary(t));
         return;
-      }
+}
 
       if (sub === 'remove') {
         const iid = args[1];
@@ -852,7 +870,7 @@ client.on('message', async (channel, tags, message, self) => {
       const mon = byId.get(c.id);
       const types = (Array.isArray(mon?.types) ? mon.types : []).map(t => t.toLowerCase());
       if (types.includes(typeArg)) {
-        names.push(`${mon.name} (#${mon?.id ?? c.id ?? '??'})${c.shiny ? ' ✨' : ''}`);
+        names.push(`[${c.iid}] ${mon.name} (#${mon?.id ?? c.id ?? '??'})${c.shiny ? ' ✨' : ''}`);
       }
       if (names.length >= cap) break;
     }

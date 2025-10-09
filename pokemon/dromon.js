@@ -547,6 +547,43 @@ function endSpawn(reason = 'despawn') {
   }
 }
 
+
+
+  if (cmd === 'dex' && args[0] === 'list') {
+    const u = ensureUser(username);
+    const typeArg = String(args[1] || '').toLowerCase();
+    if (!typeArg) { client.say(channel, `@${username} usage: ${PREFIX}dex list <type>`); return; }
+    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+    const byId = new Map(mons.map(m => [m.id, m]));
+    const caught = Array.isArray(u.catches) ? u.catches : [];
+    const names = [];
+    const cap = 40; // avoid spam
+    for (const c of caught) {
+      const mon = byId.get(c.id);
+      const types = (Array.isArray(mon?.types) ? mon.types : []).map(t => t.toLowerCase());
+      if (types.includes(typeArg)) {
+        names.push(mon.name + (c.shiny ? ' ✨' : ''));
+      }
+
+  else if (cmd === 'dex') {
+    const u = ensureUser(username);
+    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+    const byId = new Map(mons.map(m => [m.id, m]));
+    const caught = Array.isArray(u.catches) ? u.catches : [];
+    const total = mons.length;
+    const uniqueIds = new Set(caught.map(c => c.id));
+    const shinyCount = caught.filter(c => c.shiny).length;
+
+    // Build type counts
+    const typeCounts = {};
+    for (const id of uniqueIds) {
+      const mon = byId.get(id);
+      const types = Array.isArray(mon?.types) ? mon.types : [];
+      const k = types.join('/');
+      if (!k) continue;
+      typeCounts[k] = (typeCounts[k] || 0) + 1;
+    }
+
 /** =========================
  *  Intro content
  *  ========================= */
@@ -926,26 +963,7 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // Dex (pretty summary + per-type listing)
-  if (cmd === 'dex') {
-    const u = ensureUser(username);
-    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
-    const byId = new Map(mons.map(m => [m.id, m]));
-    const caught = Array.isArray(u.catches) ? u.catches : [];
-    const total = mons.length;
-    const uniqueIds = new Set(caught.map(c => c.id));
-    const shinyCount = caught.filter(c => c.shiny).length;
-
-    // Build type counts
-    const typeCounts = {};
-    for (const id of uniqueIds) {
-      const mon = byId.get(id);
-      const types = Array.isArray(mon?.types) ? mon.types : [];
-      const k = types.join('/');
-      if (!k) continue;
-      typeCounts[k] = (typeCounts[k] || 0) + 1;
-    }
-    const summary = Object.entries(typeCounts)
+  // Dex (pretty summary + per-type listing)    const summary = Object.entries(typeCounts)
       .sort((a,b) => b[1]-a[1])
       .slice(0, 10)
       .map(([k,v]) => {
@@ -955,24 +973,7 @@ client.on('message', async (channel, tags, message, self) => {
 
     client.say(channel, `@${username} Dex ${uniqueIds.size}/${total} • ✨${shinyCount} • Types: ${summary.join(' | ') || 'n/a'} • Use ${PREFIX}dex list <type> to list.`);
     return;
-  }
-
-  if (cmd === 'dex' && args[0] === 'list') {
-    const u = ensureUser(username);
-    const typeArg = String(args[1] || '').toLowerCase();
-    if (!typeArg) { client.say(channel, `@${username} usage: ${PREFIX}dex list <type>`); return; }
-    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
-    const byId = new Map(mons.map(m => [m.id, m]));
-    const caught = Array.isArray(u.catches) ? u.catches : [];
-    const names = [];
-    const cap = 40; // avoid spam
-    for (const c of caught) {
-      const mon = byId.get(c.id);
-      const types = (Array.isArray(mon?.types) ? mon.types : []).map(t => t.toLowerCase());
-      if (types.includes(typeArg)) {
-        names.push(mon.name + (c.shiny ? ' ✨' : ''));
-      }
-      if (names.length >= cap) break;
+  }      if (names.length >= cap) break;
     }
     if (!names.length) {
       client.say(channel, `@${username} you have no ${typeArg}-type entries yet.`);

@@ -35,10 +35,9 @@ function saveJson(filePath, obj) {
     console.error('[DroMon] Save failed', filePath, e?.message || e);
   }
 }
-
-// helper for short ids (base64url slice)
 function shortId(n = 8) {
-  return Buffer.from(String(Math.random())).toString('base64url').slice(0, n);
+  // small, user-friendly token for per-mon instance IDs
+  return Buffer.from(Math.random().toString(36).slice(2)).toString('base64url').slice(0, n);
 }
 
 /** =========================
@@ -163,10 +162,10 @@ let users = loadJson(USERS_FILE, {});
 let world  = loadJson(WORLD_FILE, { current: null, lastSpawnTs: 0 });
 let dex    = loadDex();
 
-// --- Ensure all existing catches have iid (instance id) to enable trading
-function ensureCatchIidsAllUsers() {
+// Ensure all existing catches have an iid (instance id) to enable trading
+(function ensureCatchIidsAllUsers() {
   let added = 0;
-  for (const [name, u] of Object.entries(users || {})) {
+  for (const [, u] of Object.entries(users || {})) {
     const arr = Array.isArray(u.catches) ? u.catches : (u.catches = []);
     for (const c of arr) {
       if (!c.iid) { c.iid = shortId(8); added++; }
@@ -176,8 +175,7 @@ function ensureCatchIidsAllUsers() {
     saveJson(USERS_FILE, users);
     console.log(`[DroMon] Trading: added ${added} missing iid(s) to existing catches.`);
   }
-}
-ensureCatchIidsAllUsers();
+})();
 
 // revive Set in world.current.caughtBy after a reload
 function reviveWorld(w) {
@@ -547,43 +545,6 @@ function endSpawn(reason = 'despawn') {
   }
 }
 
-
-
-  if (cmd === 'dex' && args[0] === 'list') {
-    const u = ensureUser(username);
-    const typeArg = String(args[1] || '').toLowerCase();
-    if (!typeArg) { client.say(channel, `@${username} usage: ${PREFIX}dex list <type>`); return; }
-    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
-    const byId = new Map(mons.map(m => [m.id, m]));
-    const caught = Array.isArray(u.catches) ? u.catches : [];
-    const names = [];
-    const cap = 40; // avoid spam
-    for (const c of caught) {
-      const mon = byId.get(c.id);
-      const types = (Array.isArray(mon?.types) ? mon.types : []).map(t => t.toLowerCase());
-      if (types.includes(typeArg)) {
-        names.push(mon.name + (c.shiny ? ' ✨' : ''));
-      }
-
-  else if (cmd === 'dex') {
-    const u = ensureUser(username);
-    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
-    const byId = new Map(mons.map(m => [m.id, m]));
-    const caught = Array.isArray(u.catches) ? u.catches : [];
-    const total = mons.length;
-    const uniqueIds = new Set(caught.map(c => c.id));
-    const shinyCount = caught.filter(c => c.shiny).length;
-
-    // Build type counts
-    const typeCounts = {};
-    for (const id of uniqueIds) {
-      const mon = byId.get(id);
-      const types = Array.isArray(mon?.types) ? mon.types : [];
-      const k = types.join('/');
-      if (!k) continue;
-      typeCounts[k] = (typeCounts[k] || 0) + 1;
-    }
-
 /** =========================
  *  Intro content
  *  ========================= */
@@ -877,6 +838,62 @@ client.on('message', async (channel, tags, message, self) => {
     }
   }
 
+  // ===== DEX LIST MUST COME BEFORE GENERIC DEX =====
+  if (cmd === 'dex' && args[0] === 'list') {
+    const u = ensureUser(username);
+    const typeArg = String(args[1] || '').toLowerCase();
+    if (!typeArg) { client.say(channel, `@${username} usage: ${PREFIX}dex list <type>`); return; }
+    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+    const byId = new Map(mons.map(m => [m.id, m]));
+    const caught = Array.isArray(u.catches) ? u.catches : [];
+    const names = [];
+    const cap = 40; // avoid spam
+    for (const c of caught) {
+      const mon = byId.get(c.id);
+      const types = (Array.isArray(mon?.types) ? mon.types : []).map(t => t.toLowerCase());
+      if (types.includes(typeArg)) {
+        names.push(mon.name + (c.shiny ? ' ✨' : ''));
+      }
+      if (names.length >= cap) break;
+    }
+    if (!names.length) {
+      client.say(channel, `@${username} you have no ${typeArg}-type entries yet.`);
+    } else {
+      const prettyType = typeArg.charAt(0).toUpperCase()+typeArg.slice(1);
+      sayChunks(client, channel, `${TYPE_EMOJI[prettyType]||'◻️'} ${prettyType}-types you’ve caught:`, names);
+    }
+    return;
+  } else if (cmd === 'dex') {
+    // Dex (pretty summary + per-type listing hint)
+    const u = ensureUser(username);
+    const mons = Array.isArray(dex.monsters) ? dex.monsters : [];
+    const byId = new Map(mons.map(m => [m.id, m]));
+    const caught = Array.isArray(u.catches) ? u.catches : [];
+    const total = mons.length;
+    const uniqueIds = new Set(caught.map(c => c.id));
+    const shinyCount = caught.filter(c => c.shiny).length;
+
+    // Build type counts
+    const typeCounts = {};
+    for (const id of uniqueIds) {
+      const mon = byId.get(id);
+      const types = Array.isArray(mon?.types) ? mon.types : [];
+      const k = types.join('/');
+      if (!k) continue;
+      typeCounts[k] = (typeCounts[k] || 0) + 1;
+    }
+    const summary = Object.entries(typeCounts)
+      .sort((a,b) => b[1]-a[1])
+      .slice(0, 10)
+      .map(([k,v]) => {
+        const badges = k.split('/').map(t => `${TYPE_EMOJI[t] || '◻️'}${t[0]}`).join('');
+        return `${badges}:${v}`;
+      });
+
+    client.say(channel, `@${username} Dex ${uniqueIds.size}/${total} • ✨${shinyCount} • Types: ${summary.join(' | ') || 'n/a'} • Use ${PREFIX}dex list <type> to list.`);
+    return;
+  }
+
   // Intro
   if (cmd === 'dromon' || cmd === 'monabout' || cmd === 'intro') {
     sayChunks(client, channel, `DroMon intro:`, DROMON_INTRO_LINES(PREFIX));
@@ -960,27 +977,6 @@ client.on('message', async (channel, tags, message, self) => {
   if (cmd === 'bag') {
     const u = ensureUser(username);
     client.say(channel, `@${username} bag → pokeball:${u.balls.pokeball||0} | greatball:${u.balls.greatball||0} | ultraball:${u.balls.ultraball||0}`);
-    return;
-  }
-
-  // Dex (pretty summary + per-type listing)    const summary = Object.entries(typeCounts)
-      .sort((a,b) => b[1]-a[1])
-      .slice(0, 10)
-      .map(([k,v]) => {
-        const badges = k.split('/').map(t => `${TYPE_EMOJI[t] || '◻️'}${t[0]}`).join('');
-        return `${badges}:${v}`;
-      });
-
-    client.say(channel, `@${username} Dex ${uniqueIds.size}/${total} • ✨${shinyCount} • Types: ${summary.join(' | ') || 'n/a'} • Use ${PREFIX}dex list <type> to list.`);
-    return;
-  }      if (names.length >= cap) break;
-    }
-    if (!names.length) {
-      client.say(channel, `@${username} you have no ${typeArg}-type entries yet.`);
-    } else {
-      const prettyType = typeArg.charAt(0).toUpperCase()+typeArg.slice(1);
-      sayChunks(client, channel, `${TYPE_EMOJI[prettyType]||'◻️'} ${prettyType}-types you’ve caught:`, names);
-    }
     return;
   }
 
@@ -1148,7 +1144,7 @@ client.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-});
+}); // <-- end of message handler
 
 // Background fill at startup (non-blocking)
 ensureCanonicalTypes(493, 200).then(changed => {
